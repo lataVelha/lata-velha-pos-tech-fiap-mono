@@ -1,0 +1,12 @@
+[submodule "app"]
+	path = app
+	url = https://lataVelha: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@github.com/lataVelha/lata-velha-pos-tech-fiap.git
+[submodule "lambda"]
+	path = lambda
+	url = https://lataVelha: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@github.com/lataVelha/lata-velha-pos-tech-fiap-lambda.git
+[submodule "infra-db"]
+	path = infra-db
+	url = https://lataVelha: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@github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db.git
+[submodule "infra"]
+	path = infra
+	url = https://lataVelha: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@github.com/lataVelha/lata-velha-pos-tech-fiap-infra.git
