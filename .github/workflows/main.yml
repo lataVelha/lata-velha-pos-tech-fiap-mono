@@ -1,0 +1,146 @@
+name: CI/CD Mono
+
+# Este workflow é do repo raiz (mono). Cada submódulo (app, infra, infra-db)
+# tem seu PRÓPRIO CI/CD no repo dele — este workflow não substitui aqueles,
+# só orquestra os três em conjunto quando o ponteiro de algum submódulo (ou
+# o apply.sh raiz) muda no mono repo.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app"
+      - "app/**"
+      - "infra"
+      - "infra/**"
+      - "infra-db"
+      - "infra-db/**"
+      - "apply.sh"
+      - ".github/workflows/main.yml"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: "Destruir toda a infraestrutura (infra + infra-db + app) em vez de aplicar"
+        type: boolean
+        default: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ============================================================
+  # CI · VALIDAÇÃO
+  # Faz checkout com os submódulos no commit fixado pelo mono repo e
+  # valida cada um: terraform validate (sem state, sem AWS) + testes
+  # Maven do app. Roda em todo push e PR. Não aplica nada.
+  # ============================================================
+  validate:
+    name: "CI · Validação dos submódulos"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configurar Java 21 (Corretto)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: corretto
+          cache: maven
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Terraform validate — infra (bootstrap + addons)
+        run: |
+          terraform -chdir=infra/terraform/bootstrap init -backend=false
+          terraform -chdir=infra/terraform/bootstrap validate
+          terraform -chdir=infra/terraform/addons init -backend=false
+          terraform -chdir=infra/terraform/addons validate
+
+      - name: Terraform validate — infra-db
+        run: |
+          terraform -chdir=infra-db/terraform/deploy init -backend=false
+          terraform -chdir=infra-db/terraform/deploy validate
+
+      - name: Terraform validate — app (deploy)
+        run: |
+          terraform -chdir=app/terraform init -backend=false
+          terraform -chdir=app/terraform validate
+
+      - name: Testes automatizados — app (Maven)
+        working-directory: app
+        run: mvn -B test -Dspring.profiles.active=test
+
+  # ============================================================
+  # CD · DEPLOY COMPLETO
+  # Encadeia infra → infra-db → app via ./apply.sh (raiz), na ordem
+  # documentada nos READMEs. Só roda em push para main que mexa em
+  # algum submódulo/apply.sh, ou via workflow_dispatch manual (que
+  # também permite destruir tudo com o input "destroy").
+  # ============================================================
+  deploy:
+    name: "CD · Deploy completo (infra → infra-db → app)"
+    needs: validate
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.ref == 'refs/heads/master' && github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    # Serializa: nunca dois pipelines de infra rodando ao mesmo tempo
+    concurrency:
+      group: mono-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Configurar Java 21 (Corretto)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: corretto
+          cache: maven
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Deploy (infra → infra-db → app)
+        env:
+          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+          TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
+          TF_VAR_db_password: ${{ secrets.TF_DB_PASSWORD }}
+          TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME }}
+          TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD }}
+        run: |
+          # --skip-tests: os testes do app já rodaram no job "validate".
+          ARGS=(--auto --skip-tests)
+          if [[ "${{ github.event.inputs.destroy }}" == "true" ]]; then
+            ARGS+=(--destroy)
+          fi
+          ./apply.sh "${ARGS[@]}"
