@@ -1,9 +1,21 @@
 name: CI/CD Mono
 
-# Este workflow é do repo raiz (mono). Cada submódulo (app, infra, infra-db)
-# tem seu PRÓPRIO CI/CD no repo dele — este workflow não substitui aqueles,
-# só orquestra os três em conjunto quando o ponteiro de algum submódulo (ou
-# o apply.sh raiz) muda no mono repo.
+# Este workflow é do repo raiz (mono). Cada submódulo (app, infra, infra-db,
+# lambda) tem seu PRÓPRIO CI/CD, no repo dele — este workflow NÃO duplica
+# essa lógica: o job "deploy-*" abaixo CHAMA o workflow reusável de cada
+# repo (uses: OWNER/REPO/.github/workflows/arquivo.yml@master), na ordem
+# certa. Quem sabe COMO fazer deploy de cada parte continua sendo o próprio
+# repo — o mono só decide QUANDO/EM QUE ORDEM.
+#
+# PRÉ-REQUISITO: cada um dos 4 repos submódulo precisa permitir ser chamado
+# de fora em Settings > Actions > General > Access ("Accessible from
+# repositories in the 'lataVelha' organization", ou liberar este repo
+# explicitamente). Sem isso, os jobs "deploy-*" falham com um erro de
+# permissão ao tentar carregar o workflow do outro repo.
+#
+# O job "destroy" (workflow_dispatch com destroy=true) é a exceção: ele
+# ainda roda os apply.sh localmente (não via workflow_call), porque nenhum
+# dos workflows reusáveis dos submódulos tem um modo de destroy.
 
 on:
   push:
@@ -15,6 +27,8 @@ on:
       - "infra/**"
       - "infra-db"
       - "infra-db/**"
+      - "lambda"
+      - "lambda/**"
       - "apply.sh"
       - ".github/workflows/main.yml"
   pull_request:
@@ -22,7 +36,7 @@ on:
   workflow_dispatch:
     inputs:
       destroy:
-        description: "Destruir toda a infraestrutura (infra + infra-db + app) em vez de aplicar"
+        description: "Destruir toda a infraestrutura (infra + infra-db + lambda + app) em vez de aplicar"
         type: boolean
         default: false
 
@@ -34,7 +48,8 @@ jobs:
   # CI · VALIDAÇÃO
   # Faz checkout com os submódulos no commit fixado pelo mono repo e
   # valida cada um: terraform validate (sem state, sem AWS) + testes
-  # Maven do app. Roda em todo push e PR. Não aplica nada.
+  # Maven do app + testes pytest da lambda. Roda em todo push e PR. Não
+  # aplica nada.
   # ============================================================
   validate:
     name: "CI · Validação dos submódulos"
@@ -59,6 +74,13 @@ jobs:
         with:
           terraform_version: "1.10.x"
 
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: lambda/requirements/dev.txt
+
       - name: Terraform validate — infra (bootstrap + addons)
         run: |
           terraform -chdir=infra/terraform/bootstrap init -backend=false
@@ -71,6 +93,11 @@ jobs:
           terraform -chdir=infra-db/terraform/deploy init -backend=false
           terraform -chdir=infra-db/terraform/deploy validate
 
+      - name: Terraform validate — lambda
+        run: |
+          terraform -chdir=lambda/terraform/deploy init -backend=false
+          terraform -chdir=lambda/terraform/deploy validate
+
       - name: Terraform validate — app (deploy)
         run: |
           terraform -chdir=app/terraform init -backend=false
@@ -80,23 +107,94 @@ jobs:
         working-directory: app
         run: mvn -B test -Dspring.profiles.active=test
 
+      - name: Testes automatizados — lambda (pytest)
+        working-directory: lambda
+        run: |
+          pip install -r requirements/dev.txt
+          pytest -q
+
   # ============================================================
-  # CD · DEPLOY COMPLETO
-  # Encadeia infra → infra-db → app via ./apply.sh (raiz), na ordem
-  # documentada nos READMEs. Só roda em push para main que mexa em
-  # algum submódulo/apply.sh, ou via workflow_dispatch manual (que
-  # também permite destruir tudo com o input "destroy").
+  # CD · DEPLOY COMPLETO — cada job chama o workflow reusável do repo
+  # correspondente. Ordem: infra bootstrap → infra-db → lambda → infra
+  # addons → app (addons precisa dos ARNs das duas lambdas — ver
+  # infra/.github/workflows/addons.yml). Só roda em push para master ou
+  # via workflow_dispatch manual, e só quando NÃO for um destroy.
   # ============================================================
-  deploy:
-    name: "CD · Deploy completo (infra → infra-db → app)"
+  deploy-infra-bootstrap:
+    name: "CD · infra (bootstrap)"
     needs: validate
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.ref == 'refs/heads/master' && github.event_name == 'push')
+      github.event.inputs.destroy != 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.ref == 'refs/heads/master' && github.event_name == 'push'))
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  deploy-infra-db:
+    name: "CD · infra-db"
+    needs: deploy-infra-bootstrap
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
+      TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
+
+  deploy-lambda:
+    name: "CD · lambda"
+    needs: deploy-infra-db
+    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  deploy-infra-addons:
+    name: "CD · infra (addons)"
+    needs: deploy-lambda
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  deploy-app:
+    name: "CD · app"
+    needs: deploy-infra-addons
+    uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+
+  # ============================================================
+  # CD · DESTROY — nenhum workflow reusável dos submódulos tem modo de
+  # destroy, então isso continua rodando os apply.sh localmente (ordem
+  # inversa, dentro do checkout com submódulos), como sempre foi.
+  # ============================================================
+  destroy:
+    name: "CD · Destruir tudo (infra + infra-db + lambda + app)"
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
-    # Serializa: nunca dois pipelines de infra rodando ao mesmo tempo
     concurrency:
       group: mono-deploy
       cancel-in-progress: false
@@ -130,17 +228,20 @@ jobs:
       - name: Instalar kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Deploy (infra → infra-db → app)
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: lambda/requirements/dev.txt
+
+      - name: Destroy (app → infra addons → lambda → infra-db → infra bootstrap)
         env:
           AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
           TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
           TF_VAR_db_password: ${{ secrets.TF_DB_PASSWORD }}
           TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME }}
           TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD }}
-        run: |
-          # --skip-tests: os testes do app já rodaram no job "validate".
-          ARGS=(--auto --skip-tests)
-          if [[ "${{ github.event.inputs.destroy }}" == "true" ]]; then
-            ARGS+=(--destroy)
-          fi
-          ./apply.sh "${ARGS[@]}"
+          TF_VAR_jwt_private_key_pem: ${{ secrets.TF_JWT_PRIVATE_KEY_PEM }}
+          TF_VAR_jwt_public_key_pem: ${{ secrets.TF_JWT_PUBLIC_KEY_PEM }}
+        run: ./apply.sh --auto --skip-tests --destroy
