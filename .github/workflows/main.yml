@@ -13,9 +13,11 @@ name: CI/CD Mono
 # explicitamente). Sem isso, os jobs "deploy-*" falham com um erro de
 # permissão ao tentar carregar o workflow do outro repo.
 #
-# O job "destroy" (workflow_dispatch com destroy=true) é a exceção: ele
-# ainda roda os apply.sh localmente (não via workflow_call), porque nenhum
-# dos workflows reusáveis dos submódulos tem um modo de destroy.
+# Os jobs "destroy-*" (workflow_dispatch com destroy=true) seguem o mesmo
+# padrão: cada workflow reusável dos submódulos também aceita o input
+# "destroy" (mesmo comportamento do "--destroy" que os apply.sh locais já
+# tinham) — o mono só chama cada um com destroy=true, na ordem inversa do
+# deploy.
 
 on:
   push:
@@ -184,64 +186,73 @@ jobs:
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
 
   # ============================================================
-  # CD · DESTROY — nenhum workflow reusável dos submódulos tem modo de
-  # destroy, então isso continua rodando os apply.sh localmente (ordem
-  # inversa, dentro do checkout com submódulos), como sempre foi.
+  # CD · DESTROY COMPLETO — cada job chama o workflow reusável do repo
+  # correspondente com destroy=true, ordem inversa do deploy: app → infra
+  # addons → lambda → infra-db → infra bootstrap (mesma ordem do
+  # "./apply.sh --destroy" local). Só roda via workflow_dispatch manual
+  # com destroy=true.
   # ============================================================
-  destroy:
-    name: "CD · Destruir tudo (infra + infra-db + lambda + app)"
+  destroy-app:
+    name: "CD · Destruir · app"
     needs: validate
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
 
-    concurrency:
-      group: mono-deploy
-      cancel-in-progress: false
+  destroy-infra-addons:
+    name: "CD · Destruir · infra (addons)"
+    needs: destroy-app
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
-    steps:
-      - name: Checkout do código (com submódulos)
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+  destroy-lambda:
+    name: "CD · Destruir · lambda"
+    needs: destroy-infra-addons
+    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
-      - name: Autenticar na AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ vars.AWS_REGION }}
+  destroy-infra-db:
+    name: "CD · Destruir · infra-db"
+    needs: destroy-lambda
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
+      TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
 
-      - name: Configurar Java 21 (Corretto)
-        uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: corretto
-          cache: maven
-
-      - name: Instalar Terraform 1.10
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.10.x"
-
-      - name: Instalar kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Configurar Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: lambda/requirements/dev.txt
-
-      - name: Destroy (app → infra addons → lambda → infra-db → infra bootstrap)
-        env:
-          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
-          TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
-          TF_VAR_db_password: ${{ secrets.TF_DB_PASSWORD }}
-          TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME }}
-          TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD }}
-          TF_VAR_jwt_private_key_pem: ${{ secrets.TF_JWT_PRIVATE_KEY_PEM }}
-          TF_VAR_jwt_public_key_pem: ${{ secrets.TF_JWT_PUBLIC_KEY_PEM }}
-        run: ./apply.sh --auto --skip-tests --destroy
+  destroy-infra-bootstrap:
+    name: "CD · Destruir · infra (bootstrap)"
+    needs: destroy-infra-db
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
