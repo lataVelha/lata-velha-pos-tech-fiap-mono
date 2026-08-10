@@ -131,7 +131,7 @@ jobs:
        (github.ref == 'refs/heads/master' && github.event_name == 'push'))
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -142,7 +142,7 @@ jobs:
     needs: deploy-infra-bootstrap
     uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -155,7 +155,7 @@ jobs:
     needs: deploy-infra-db
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -166,7 +166,7 @@ jobs:
     needs: deploy-lambda
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -177,7 +177,7 @@ jobs:
     needs: deploy-infra-addons
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -198,7 +198,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -212,7 +212,7 @@ jobs:
     needs: destroy-app
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -224,7 +224,7 @@ jobs:
     needs: destroy-infra-addons
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -236,7 +236,7 @@ jobs:
     needs: destroy-lambda
     uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -250,7 +250,7 @@ jobs:
     needs: destroy-infra-db
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
     with:
-      aws_region: ${{ vars.AWS_REGION }}
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
