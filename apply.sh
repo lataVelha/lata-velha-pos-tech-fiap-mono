@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 #
 # apply.sh — orquestra o apply.sh de cada submódulo, na ordem documentada
-# nos READMEs (infra bootstrap → infra-db → lambda → infra addons → app):
+# nos READMEs (infra bootstrap → infra addons → infra-db → lambda → app):
 #
-#   (padrão)   [1/5] infra bootstrap (VPC+EKS+ECR) → [2/5] infra-db (RDS) →
-#              [3/5] lambda (auth CPF + authorizer) → [4/5] infra addons
-#              (ALB interno + API Gateway do app + autoscaler) → [5/5] app (deploy)
+#   (padrão)   [1/5] infra bootstrap (VPC+EKS+ECR) → [2/5] infra addons
+#              (ALB interno + API Gateway vazio + autoscaler) → [3/5] infra-db
+#              (RDS) → [4/5] lambda (auth CPF + authorizer, anexa no API
+#              Gateway) → [5/5] app (deploy, anexa integração ALB + rotas)
 #   --destroy  ordem inversa
 #
-# O API Gateway do app (infra addons) anexa a lambda authorizer nas rotas
-# protegidas — por isso addons só pode rodar DEPOIS do repo lambda, mesmo
-# bootstrap rodando antes dele (o addons/apply.sh do infra suporta
-# --bootstrap-only/--addons-only justamente para permitir essa intercalação).
+# O API Gateway (infra addons) não depende de mais nenhum repo — cria só o
+# "casco" (API + VPC Link + Stage, sem rotas), por isso roda logo após o
+# bootstrap. Quem anexa rota nele é o próprio lambda (POST /auth/cpf +
+# authorizer) e o próprio app (integração ALB + rotas públicas/protegidas),
+# cada um via terraform_remote_state — nenhum precisa que o infra saiba
+# que eles existem.
 #
 # Uso:
 #   ./apply.sh                  — pipeline completo, com confirmação interativa
@@ -102,15 +105,15 @@ echo "${C_BLUE}═════════════════════�
 
 if [[ "$DESTROY" == "true" ]]; then
   run_step "app (deploy)"              "$SCRIPT_DIR/app/terraform/apply.sh"       "${APP_ARGS[@]}"
-  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
   run_step "lambda (auth CPF)"         "$SCRIPT_DIR/lambda/terraform/apply.sh"    "${COMMON_ARGS[@]}"
   run_step "infra-db (RDS)"            "$SCRIPT_DIR/infra-db/terraform/apply.sh"  "${COMMON_ARGS[@]}"
+  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
   run_step "infra bootstrap"           "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --bootstrap-only
 else
   run_step "infra bootstrap"           "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --bootstrap-only
+  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
   run_step "infra-db (RDS)"            "$SCRIPT_DIR/infra-db/terraform/apply.sh"  "${COMMON_ARGS[@]}"
   run_step "lambda (auth CPF)"         "$SCRIPT_DIR/lambda/terraform/apply.sh"    "${COMMON_ARGS[@]}"
-  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
   run_step "app (deploy)"              "$SCRIPT_DIR/app/terraform/apply.sh"       "${APP_ARGS[@]}"
 fi
 

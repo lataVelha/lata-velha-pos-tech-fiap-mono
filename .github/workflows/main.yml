@@ -117,19 +117,28 @@ jobs:
 
   # ============================================================
   # CD · DEPLOY COMPLETO — cada job chama o workflow reusável do repo
-  # correspondente. Ordem: infra bootstrap → infra-db → lambda → infra
-  # addons → app (addons precisa dos ARNs das duas lambdas — ver
-  # infra/.github/workflows/addons.yml). Só roda em push para master ou
-  # via workflow_dispatch manual, e só quando NÃO for um destroy.
+  # correspondente. Ordem: infra bootstrap → infra addons → infra-db →
+  # lambda → app. Addons roda logo após o bootstrap (não depende mais de
+  # lambda — o API Gateway que ele cria é só o "casco", sem rotas; quem
+  # anexa rota é o próprio repo lambda/app via terraform_remote_state). Só
+  # roda via workflow_dispatch manual, e só quando NÃO for um destroy.
   # ============================================================
   deploy-infra-bootstrap:
     name: "CD · infra (bootstrap)"
     needs: validate
-    if: >
-      github.event.inputs.destroy != 'true' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.ref == 'refs/heads/master' && github.event_name == 'push'))
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true'
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  deploy-infra-addons:
+    name: "CD · infra (addons)"
+    needs: deploy-infra-bootstrap
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
     secrets:
@@ -139,7 +148,7 @@ jobs:
 
   deploy-infra-db:
     name: "CD · infra-db"
-    needs: deploy-infra-bootstrap
+    needs: deploy-infra-addons
     uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -161,20 +170,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
-  deploy-infra-addons:
-    name: "CD · infra (addons)"
-    needs: deploy-lambda
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-
   deploy-app:
     name: "CD · app"
-    needs: deploy-infra-addons
+    needs: deploy-lambda
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -187,10 +185,10 @@ jobs:
 
   # ============================================================
   # CD · DESTROY COMPLETO — cada job chama o workflow reusável do repo
-  # correspondente com destroy=true, ordem inversa do deploy: app → infra
-  # addons → lambda → infra-db → infra bootstrap (mesma ordem do
-  # "./apply.sh --destroy" local). Só roda via workflow_dispatch manual
-  # com destroy=true.
+  # correspondente com destroy=true, ordem inversa da NOVA topologia de
+  # dependência: app (usa addons+lambda+infra-db) → lambda (usa
+  # addons+bootstrap+infra-db) → infra-db → infra addons → infra bootstrap.
+  # Só roda via workflow_dispatch manual com destroy=true.
   # ============================================================
   destroy-app:
     name: "CD · Destruir · app"
@@ -207,21 +205,9 @@ jobs:
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
 
-  destroy-infra-addons:
-    name: "CD · Destruir · infra (addons)"
-    needs: destroy-app
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      destroy: true
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-
   destroy-lambda:
     name: "CD · Destruir · lambda"
-    needs: destroy-infra-addons
+    needs: destroy-app
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -245,9 +231,21 @@ jobs:
       TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
       TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
 
+  destroy-infra-addons:
+    name: "CD · Destruir · infra (addons)"
+    needs: destroy-infra-db
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
   destroy-infra-bootstrap:
     name: "CD · Destruir · infra (bootstrap)"
-    needs: destroy-infra-db
+    needs: destroy-infra-addons
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}

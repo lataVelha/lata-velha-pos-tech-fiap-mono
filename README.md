@@ -33,14 +33,19 @@ para os detalhes da arquitetura.
 ## Ordem do pipeline
 
 ```
-infra (bootstrap)  →  infra-db  →  lambda  →  infra (addons)  →  app
-  VPC+EKS+ECR          RDS          auth-cpf     ALB interno +      deploy da
-                                    + authorizer  API Gateway        aplicação
+infra (bootstrap)  →  infra (addons)  →  infra-db  →  lambda  →  app
+  VPC+EKS+ECR           ALB interno +        RDS        auth-cpf +    deploy da
+                        API Gateway vazio                authorizer    aplicação
 ```
 
-O `infra` roda em duas etapas (`bootstrap` e `addons`) porque os `addons` (API Gateway) só
-podem ser aplicados **depois** do `lambda` — o API Gateway precisa do ARN das duas lambdas
-(`auth-cpf` e `jwt-authorizer`) para anexar a rota `/auth/cpf` e a authorizer. Detalhes em
+O `infra` roda em duas etapas (`bootstrap` e `addons`) porque os providers `kubectl`/`helm` do
+`addons` precisam do endpoint do EKS já existindo — não dá pra criar o cluster e configurar esses
+providers na mesma apply. Isso é estrutural (sempre vai precisar de duas chamadas Terraform), mas
+`addons` **não depende de nenhum outro repo** — ele cria só o "casco" do API Gateway (API + VPC
+Link + Stage, sem nenhuma rota) e roda logo em seguida do bootstrap, no mesmo disparo. Quem anexa
+rota nesse Gateway é o próprio `lambda` (`POST /auth/cpf` + authorizer) e o próprio `app`
+(integração com o ALB + rotas públicas/protegidas), cada um lendo o `api_id` via
+`terraform_remote_state` — nenhum deles precisa que o `infra` saiba que eles existem. Detalhes em
 [`infra/README.md`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra#por-que-dois-módulos-terraform-separados-bootstrap-e-addons).
 
 ## Como clonar
@@ -89,20 +94,27 @@ lataVelha/<repo>/.github/workflows/<arquivo>.yml@master`), na ordem do
 [pipeline](#ordem-do-pipeline), encadeados via `needs:`:
 
 1. `deploy-infra-bootstrap` → `infra/.github/workflows/bootstrap.yml`
-2. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`
-3. `deploy-lambda` → `lambda/.github/workflows/main.yml`
-4. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`
+2. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`
+3. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`
+4. `deploy-lambda` → `lambda/.github/workflows/main.yml`
 5. `deploy-app` → `app/.github/workflows/main.yml`
 
-Um job `validate` roda antes de tudo, em todo push e PR: checkout com os submódulos fixados no
-commit do mono repo, `terraform validate` de todos e testes (Maven do `app`, jest do `lambda`) —
-sem aplicar nada.
+Um job `validate` roda em todo push e PR: checkout com os submódulos fixados no commit do mono
+repo, `terraform validate` de todos e testes (Maven do `app`, pytest do `lambda`) — sem aplicar
+nada. Os jobs `deploy-*`/`destroy-*` só rodam via **disparo manual** (`workflow_dispatch`) — um
+push pra `master`, aqui e em cada submódulo, nunca aplica infra real sozinho, só roda a parte de
+CI (testes/validate/plan).
 
 **Pré-requisito:** cada um dos 4 repos submódulo precisa permitir ser chamado de fora, em
-**Settings → Actions → General → Access** (liberar para a organização `lataVelha` ou para este
-repo especificamente). Sem isso, os jobs `deploy-*` falham com erro de permissão ao carregar o
-workflow do outro repo.
+**Settings → Actions → General → Access** (liberar para a organização/conta `lataVelha` ou para
+este repo especificamente) — como `lataVelha` é uma conta pessoal (não organização), essa
+liberação nem sempre é suficiente sozinha; os 4 repos submódulo estão públicos, o que também
+resolve o acesso cross-repo. Sem isso, os jobs `deploy-*`/`destroy-*` falham com "workflow was
+not found" ao tentar carregar o workflow do outro repo.
 
-**Destroy:** nenhum dos workflows reusáveis dos submódulos tem um modo de destroy — o job
-`destroy` (`workflow_dispatch` com `destroy: true`) roda os `apply.sh --destroy` de cada
-submódulo diretamente, na ordem inversa, dentro do checkout com submódulos.
+**Destroy:** cada submódulo também aceita um input `destroy` no próprio `workflow_call` (mesmo
+padrão do `--destroy` que os `apply.sh` locais já tinham) — o job `workflow_dispatch` com
+`destroy: true` chama os mesmos 5 workflows reusáveis do deploy, só que com `destroy: true`, na
+ordem inversa da **nova** topologia de dependência: `app → lambda → infra-db → infra (addons) →
+infra (bootstrap)` (app e lambda dependem do `api_id` que o `addons` criou, então têm que ser
+destruídos antes dele).
