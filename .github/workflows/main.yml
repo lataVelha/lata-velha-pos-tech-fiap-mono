@@ -120,13 +120,16 @@ jobs:
   # correspondente. Ordem: infra bootstrap → infra addons → infra-db →
   # lambda → app. Addons roda logo após o bootstrap (não depende mais de
   # lambda — o API Gateway que ele cria é só o "casco", sem rotas; quem
-  # anexa rota é o próprio repo lambda/app via terraform_remote_state). Só
-  # roda via workflow_dispatch manual, e só quando NÃO for um destroy.
+  # anexa rota é o próprio repo lambda/app via terraform_remote_state). Roda
+  # em push pra master ou via workflow_dispatch manual, e só quando NÃO for
+  # um destroy.
   # ============================================================
   deploy-infra-bootstrap:
     name: "CD · infra (bootstrap)"
     needs: validate
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true'
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}

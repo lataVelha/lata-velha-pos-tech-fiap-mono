@@ -101,9 +101,9 @@ lataVelha/<repo>/.github/workflows/<arquivo>.yml@master`), na ordem do
 
 Um job `validate` roda em todo push e PR: checkout com os submódulos fixados no commit do mono
 repo, `terraform validate` de todos e testes (Maven do `app`, pytest do `lambda`) — sem aplicar
-nada. Os jobs `deploy-*`/`destroy-*` só rodam via **disparo manual** (`workflow_dispatch`) — um
-push pra `master`, aqui e em cada submódulo, nunca aplica infra real sozinho, só roda a parte de
-CI (testes/validate/plan).
+nada. Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
+disparo manual (`workflow_dispatch`) — os jobs `destroy-*` só rodam via `workflow_dispatch`
+com `destroy: true` (nunca automático).
 
 **Pré-requisito:** cada um dos 4 repos submódulo precisa permitir ser chamado de fora, em
 **Settings → Actions → General → Access** (liberar para a organização/conta `lataVelha` ou para
