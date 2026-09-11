@@ -148,6 +148,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_dd_api_key }}
 
   deploy-infra-db:
     name: "CD · infra-db"
@@ -185,6 +186,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
 
   # ============================================================
   # CD · DESTROY COMPLETO — cada job chama o workflow reusável do repo
