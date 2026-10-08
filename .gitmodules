@@ -10,3 +10,6 @@
 [submodule "infra"]
 	path = infra
 	url = https://lataVelha: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@github.com/lataVelha/lata-velha-pos-tech-fiap-infra.git
+[submodule "billing-service"]
+	path = billing-service
+	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service.git

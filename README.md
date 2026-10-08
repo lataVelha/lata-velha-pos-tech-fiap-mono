@@ -29,6 +29,7 @@ para os detalhes da arquitetura.
 | [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL |
 | [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | Login por CPF (`auth-cpf`) e a lambda authorizer, anexadas ao API Gateway do `infra` |
 | [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Aplicação Spring Boot (DDD) + deploy dela no cluster (Deployment/Service/ConfigMap/Secret/HPA/PDB) |
+| [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança das OS integrada ao Mercado Pago (Checkout Pro + Webhooks). Ainda não faz parte do pipeline de deploy |
 
 ## Ordem do pipeline
 
