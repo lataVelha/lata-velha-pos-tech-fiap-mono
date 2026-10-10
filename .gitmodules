@@ -13,3 +13,9 @@
 [submodule "billing-service"]
 	path = billing-service
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service.git
+[submodule "inventory-service"]
+	path = inventory-service
+	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service.git
+[submodule "os-service"]
+	path = os-service
+	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service.git
