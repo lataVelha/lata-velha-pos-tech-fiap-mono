@@ -126,12 +126,6 @@ docker compose ps      # espera todos ficarem "healthy"
 | `billing-service` | http://localhost:8081/swagger-ui.html | `postgres-billing:5432/lata_velha_billing` (host `5433`) |
 | RabbitMQ (broker de eventos, dev) | management UI em http://localhost:15672 (guest/guest) | AMQP na porta `5672` |
 
-**Por que Dockerfiles próprios em `docker/`:** os Dockerfiles originais de `os-service` e
-`inventory-service` não copiam o submódulo `shared-kernel` (ele só passou a existir depois
-da separação) — em vez de alterar esses dois repos só por isso, `docker/os-service.Dockerfile`
-e `docker/inventory-service.Dockerfile` fazem o build a partir da raiz do mono (contexto `.`),
-copiando `<serviço>/pom.xml`, `<serviço>/shared-kernel` e `<serviço>/src`.
-
 **RabbitMQ vs SQS:** RabbitMQ aqui é só pro ambiente de dev/local — em produção o adapter
 correspondente (quando os serviços passarem a consumi-lo) é SQS. Ver o scaffolding de eventos
 no submódulo `shared-kernel`.
