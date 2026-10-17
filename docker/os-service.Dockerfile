@@ -1,8 +1,3 @@
-# Build a partir da raiz do mono repo (precisa ver os-service/ e o submódulo
-# shared-kernel/ já inicializado dentro dele: git submodule update --init --recursive).
-# O Dockerfile original do os-service não copia shared-kernel/ — ele só existe
-# desde que o shared-kernel passou a ser consumido via submódulo, então mantemos
-# esta variante aqui no mono em vez de alterar o repo do os-service.
 FROM maven:3-amazoncorretto-21 AS build
 
 WORKDIR /app

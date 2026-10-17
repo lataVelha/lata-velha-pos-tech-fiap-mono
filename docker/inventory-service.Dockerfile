@@ -1,5 +1,3 @@
-# Build a partir da raiz do mono repo — ver os-service.Dockerfile para o porquê
-# desta variante existir aqui em vez de no repo do inventory-service.
 FROM maven:3-amazoncorretto-21 AS build
 
 WORKDIR /app

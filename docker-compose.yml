@@ -1,27 +1,5 @@
 name: lata-velha-dev
 
-# Ambiente de desenvolvimento local para testar os serviços já separados
-# (os-service, inventory-service, billing-service) rodando juntos, com um
-# broker de eventos (RabbitMQ) disponível para quando o scaffolding de
-# eventos do shared-kernel for consumido por eles.
-#
-# Não inclui o monolito antigo (app/) — este compose é especificamente para
-# validar a topologia pós-separação. O app/ continua com seu próprio
-# docker-compose.yml, independente deste.
-#
-# Uso:
-#   git submodule update --init --recursive   # garante shared-kernel dentro
-#                                               # de os-service/ e inventory-service/
-#   docker compose up --build -d
-#   docker compose logs -f os-service inventory-service billing-service
-#   docker compose down -v                    # para tudo e limpa os volumes
-#
-# Swagger:
-#   os-service:        http://localhost:8080/swagger-ui.html
-#   inventory-service:  http://localhost:8082/swagger-ui.html
-#   billing-service:    http://localhost:8081/swagger-ui.html
-# RabbitMQ management UI: http://localhost:15672 (guest/guest)
-
 services:
   os-service:
     container_name: lata-velha-os-service
@@ -42,8 +20,6 @@ services:
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
       JWT_ISSUER: lata-velha
       JWT_EXPIRES_IN: "3600"
-      # Broker de eventos (dev) — sem efeito até o os-service consumir o
-      # adapter RabbitMQ do shared-kernel; já deixado configurado.
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: guest
@@ -201,8 +177,6 @@ services:
     networks:
       - lata_velha_dev
 
-  # Broker de eventos para dev/local (ver docs/general-flow.md). Em produção,
-  # o adapter correspondente é SQS — RabbitMQ existe só neste compose de dev.
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: lata-velha-rabbitmq
@@ -211,8 +185,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"   # AMQP
-      - "15672:15672" # management UI (http://localhost:15672, guest/guest)
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
