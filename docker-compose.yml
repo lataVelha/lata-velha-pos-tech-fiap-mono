@@ -3,9 +3,7 @@ name: lata-velha-dev
 services:
   os-service:
     container_name: lata-velha-os-service
-    build:
-      context: .
-      dockerfile: docker/os-service.Dockerfile
+    build: "./os-service"
     restart: unless-stopped
     environment:
       ENVIRONMENT: dev
@@ -43,9 +41,7 @@ services:
 
   inventory-service:
     container_name: lata-velha-inventory-service
-    build:
-      context: .
-      dockerfile: docker/inventory-service.Dockerfile
+    build: "./inventory-service"
     restart: unless-stopped
     environment:
       ENVIRONMENT: dev
