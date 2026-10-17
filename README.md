@@ -17,6 +17,7 @@ para os detalhes da arquitetura.
 - [Ordem do pipeline](#ordem-do-pipeline)
 - [Como clonar](#como-clonar)
 - [Execução local (`apply.sh`)](#execução-local-applysh)
+- [Ambiente de desenvolvimento local (serviços separados)](#ambiente-de-desenvolvimento-local-serviços-separados)
 - [CI/CD (GitHub Actions)](#cicd-github-actions)
 
 ---
@@ -28,8 +29,16 @@ para os detalhes da arquitetura.
 | [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno, API Gateway (único ponto de entrada), Cluster Autoscaler |
 | [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL |
 | [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | Login por CPF (`auth-cpf`) e a lambda authorizer, anexadas ao API Gateway do `infra` |
-| [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Aplicação Spring Boot (DDD) + deploy dela no cluster (Deployment/Service/ConfigMap/Secret/HPA/PDB) |
+| [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Monolito original (DDD) + deploy dele no cluster (Deployment/Service/ConfigMap/Secret/HPA/PDB). Ainda é o que o pipeline de produção (`apply.sh`/CI) deploya — ver [separação em andamento](#ambiente-de-desenvolvimento-local-serviços-separados) |
+| [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | `app` separado: domínio de Ordem de Serviço (proprietário, veículo, serviço, OS) + `authentication`. Ainda não faz parte do pipeline de deploy |
+| [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | `app` separado: domínio de Peça/Estoque/PecaAlocada. Ainda não faz parte do pipeline de deploy |
 | [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança das OS integrada ao Mercado Pago (Checkout Pro + Webhooks). Ainda não faz parte do pipeline de deploy |
+
+`os-service` e `inventory-service` compartilham código genérico (exceções, logging, paginação,
+e-mail) via o submódulo git `shared-kernel` (repo
+[`lata-velha-pos-tech-fiap-shared`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-shared))
+dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada serviço só adiciona o
+`src/main/java` do submódulo como source root extra (`build-helper-maven-plugin`).
 
 ## Ordem do pipeline
 
@@ -85,6 +94,53 @@ combinados. Cada repo tem seu `terraform.tfvars.example` — copie e edite antes
 ./apply.sh --skip-tests       # pula os testes Maven do app
 ./apply.sh --destroy          # desfaz tudo, ordem inversa, com confirmação
 ./apply.sh --destroy --auto   # desfaz tudo, sem confirmação
+```
+
+## Ambiente de desenvolvimento local (serviços separados)
+
+Enquanto o `app` monolítico continua sendo o que vai pra produção (ver seção anterior), este
+`docker-compose.yml` na raiz sobe **os serviços já separados** — `os-service`,
+`inventory-service` e `billing-service` — junto com os bancos de cada um e um broker de
+eventos (RabbitMQ), pra testar a topologia pós-separação localmente. Não inclui o `app`
+nem a infra AWS.
+
+**Pré-requisito:** Docker + submódulos inicializados recursivamente (precisa do
+`shared-kernel` dentro de `os-service/` e `inventory-service/`):
+
+```bash
+git submodule update --init --recursive
+```
+
+**Subir tudo:**
+
+```bash
+cp .env.example .env   # opcional — e-mail e Mercado Pago funcionam sem preencher
+docker compose up --build -d
+docker compose ps      # espera todos ficarem "healthy"
+```
+
+| Serviço | Swagger | Banco |
+| --- | --- | --- |
+| `os-service` | http://localhost:8080/swagger-ui.html | `postgres-os:5432/lata_velha_os` (host `5432`) |
+| `inventory-service` | http://localhost:8082/swagger-ui.html | `postgres-inventory:5432/lata_velha_inventory` (host `5434`) |
+| `billing-service` | http://localhost:8081/swagger-ui.html | `postgres-billing:5432/lata_velha_billing` (host `5433`) |
+| RabbitMQ (broker de eventos, dev) | management UI em http://localhost:15672 (guest/guest) | AMQP na porta `5672` |
+
+**Por que Dockerfiles próprios em `docker/`:** os Dockerfiles originais de `os-service` e
+`inventory-service` não copiam o submódulo `shared-kernel` (ele só passou a existir depois
+da separação) — em vez de alterar esses dois repos só por isso, `docker/os-service.Dockerfile`
+e `docker/inventory-service.Dockerfile` fazem o build a partir da raiz do mono (contexto `.`),
+copiando `<serviço>/pom.xml`, `<serviço>/shared-kernel` e `<serviço>/src`.
+
+**RabbitMQ vs SQS:** RabbitMQ aqui é só pro ambiente de dev/local — em produção o adapter
+correspondente (quando os serviços passarem a consumi-lo) é SQS. Ver o scaffolding de eventos
+no submódulo `shared-kernel`.
+
+**Parar tudo:**
+
+```bash
+docker compose down       # mantém os dados dos bancos (volumes)
+docker compose down -v    # remove também os volumes (bancos zerados no próximo up)
 ```
 
 ## CI/CD (GitHub Actions)
