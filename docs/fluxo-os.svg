@@ -1,0 +1,472 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 2180" width="1800" height="2180" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="aB" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#2563EB"/></marker>
+    <marker id="aG" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#16A34A"/></marker>
+    <marker id="aO" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#EA580C"/></marker>
+    <marker id="aOL" markerWidth="9" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="9 0,0 3.5,9 7" fill="#EA580C"/></marker>
+    <marker id="aP" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#9333EA"/></marker>
+    <marker id="aPL" markerWidth="9" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="9 0,0 3.5,9 7" fill="#9333EA"/></marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1800" height="2180" fill="#F0F4F8"/>
+
+  <!-- ===== HEADER ===== -->
+  <rect x="0" y="0" width="1800" height="62" fill="#1A2340"/>
+  <text x="900" y="40" text-anchor="middle" font-size="24" font-weight="bold" fill="white">Lata Velha — Fluxo Completo: OS · Serviços · Pagamento · Estoque</text>
+
+  <!-- ===== LEGEND ===== -->
+  <rect x="20" y="72" width="1760" height="42" rx="7" fill="white" stroke="#D0D8E4" stroke-width="1"/>
+  <rect x="38" y="86" width="16" height="16" rx="3" fill="#2563EB"/><text x="60" y="99" font-size="12" fill="#333">os-service</text>
+  <rect x="148" y="86" width="16" height="16" rx="3" fill="#16A34A"/><text x="170" y="99" font-size="12" fill="#333">billing-service</text>
+  <rect x="290" y="86" width="16" height="16" rx="3" fill="#9333EA"/><text x="312" y="99" font-size="12" fill="#333">inventory-service</text>
+  <rect x="462" y="86" width="16" height="16" rx="3" fill="#EA580C"/><text x="484" y="99" font-size="12" fill="#333">Evento RabbitMQ</text>
+  <rect x="620" y="86" width="16" height="16" rx="3" fill="#0891B2"/><text x="642" y="99" font-size="12" fill="#333">Status OS</text>
+  <rect x="740" y="86" width="16" height="16" rx="3" fill="#CA8A04"/><text x="762" y="99" font-size="12" fill="#333">Status Serviço</text>
+  <rect x="882" y="86" width="16" height="16" rx="3" fill="#BE185D"/><text x="904" y="99" font-size="12" fill="#333">Status Pagamento</text>
+  <rect x="1060" y="86" width="16" height="16" rx="3" fill="#475569"/><text x="1082" y="99" font-size="12" fill="#333">REST sync</text>
+  <line x1="1180" y1="94" x2="1215" y2="94" stroke="#EA580C" stroke-width="2" stroke-dasharray="5,3"/><text x="1222" y="99" font-size="12" fill="#333">Evento async</text>
+
+  <!-- ===== COLUMN HEADERS ===== -->
+  <!-- os-service -->
+  <rect x="20" y="124" width="370" height="36" rx="6" fill="#1E40AF"/>
+  <text x="205" y="147" text-anchor="middle" font-size="14" font-weight="bold" fill="white">⚙  os-service  :8080</text>
+  <!-- events os↔billing -->
+  <rect x="408" y="124" width="318" height="36" rx="6" fill="#7C3AED"/>
+  <text x="567" y="147" text-anchor="middle" font-size="13" font-weight="bold" fill="white">🐇 RabbitMQ  os ↔ billing</text>
+  <!-- billing-service -->
+  <rect x="744" y="124" width="370" height="36" rx="6" fill="#15803D"/>
+  <text x="929" y="147" text-anchor="middle" font-size="14" font-weight="bold" fill="white">💰  billing-service  :8081</text>
+  <!-- events billing↔inventory -->
+  <rect x="1132" y="124" width="256" height="36" rx="6" fill="#7C3AED"/>
+  <text x="1260" y="147" text-anchor="middle" font-size="13" font-weight="bold" fill="white">🐇 billing ↔ inventory</text>
+  <!-- inventory-service -->
+  <rect x="1406" y="124" width="374" height="36" rx="6" fill="#6B21A8"/>
+  <text x="1593" y="147" text-anchor="middle" font-size="14" font-weight="bold" fill="white">📦  inventory-service  :8082</text>
+
+  <!-- ===== TIMELINE DASHED LINES ===== -->
+  <line x1="205"  y1="170" x2="205"  y2="1580" stroke="#BFDBFE" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <line x1="567"  y1="170" x2="567"  y2="1580" stroke="#DDD6FE" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <line x1="929"  y1="170" x2="929"  y2="1580" stroke="#BBF7D0" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <line x1="1260" y1="170" x2="1260" y2="1580" stroke="#DDD6FE" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <line x1="1593" y1="170" x2="1593" y2="1580" stroke="#E9D5FF" stroke-width="1.5" stroke-dasharray="5,4"/>
+
+  <!-- ============================================================
+       STEP 1 — POST /ordens-servico → RECEBIDA
+  ============================================================ -->
+  <rect x="20" y="178" width="370" height="78" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="178" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="192" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="195" text-anchor="middle" font-size="12" font-weight="bold" fill="white">POST /ordens-servico  →  201</text>
+  <rect x="38" y="212" width="110" height="22" rx="11" fill="#0891B2"/>
+  <text x="93" y="227" text-anchor="middle" font-size="11" font-weight="bold" fill="white">RECEBIDA</text>
+  <text x="158" y="225" font-size="11" fill="#555">proprietário + veículo</text>
+  <text x="158" y="240" font-size="11" fill="#555">atendente + mecânico</text>
+  <circle cx="372" cy="217" r="14" fill="#1A2340"/>
+  <text x="372" y="222" text-anchor="middle" font-size="11" font-weight="bold" fill="white">1</text>
+
+  <!-- ============================================================
+       STEP 2 — iniciar-diagnostico → EM_DIAGNOSTICO
+  ============================================================ -->
+  <line x1="205" y1="256" x2="205" y2="278" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="271" font-size="10" fill="#64748B">PATCH /iniciar-diagnostico</text>
+
+  <rect x="20" y="278" width="370" height="72" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="278" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="292" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="295" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /iniciar-diagnostico  →  200</text>
+  <rect x="38" y="312" width="138" height="22" rx="11" fill="#0891B2"/>
+  <text x="107" y="327" text-anchor="middle" font-size="11" font-weight="bold" fill="white">EM_DIAGNOSTICO</text>
+  <text x="185" y="327" font-size="11" fill="#555">mecânico analisa o veículo</text>
+  <circle cx="372" cy="317" r="14" fill="#1A2340"/>
+  <text x="372" y="322" text-anchor="middle" font-size="11" font-weight="bold" fill="white">2</text>
+
+  <!-- ============================================================
+       STEP 3 — adicionar-servico → PENDENTE
+  ============================================================ -->
+  <line x1="205" y1="350" x2="205" y2="372" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="365" font-size="10" fill="#64748B">PATCH /adicionar-servico</text>
+
+  <rect x="20" y="372" width="370" height="90" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="372" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="386" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="389" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /adicionar-servico  →  200</text>
+  <text x="38" y="412" font-size="11" fill="#555">Serviços com mão-de-obra e peças:</text>
+  <rect x="38" y="418" width="92" height="20" rx="10" fill="#CA8A04"/>
+  <text x="84" y="432" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PENDENTE</text>
+  <text x="138" y="432" font-size="11" fill="#555">cada ExecucaoServico</text>
+  <text x="38" y="454" font-size="11" fill="#888">peças: pecaId + qtd (preço buscado no passo 5)</text>
+  <circle cx="372" cy="417" r="14" fill="#1A2340"/>
+  <text x="372" y="422" text-anchor="middle" font-size="11" font-weight="bold" fill="white">3</text>
+
+  <!-- ============================================================
+       STEP 4 — finalizar-diagnostico → AGUARDANDO_APROVACAO + evento
+  ============================================================ -->
+  <line x1="205" y1="462" x2="205" y2="484" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="477" font-size="10" fill="#64748B">PATCH /finalizar-diagnostico</text>
+
+  <rect x="20" y="484" width="370" height="72" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="484" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="498" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="501" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /finalizar-diagnostico  →  200</text>
+  <rect x="38" y="518" width="188" height="22" rx="11" fill="#0891B2"/>
+  <text x="132" y="533" text-anchor="middle" font-size="11" font-weight="bold" fill="white">AGUARDANDO_APROVACAO</text>
+  <text x="234" y="533" font-size="11" fill="#555">diagnóstico fechado</text>
+  <circle cx="372" cy="530" r="14" fill="#1A2340"/>
+  <text x="372" y="535" text-anchor="middle" font-size="11" font-weight="bold" fill="white">4</text>
+
+  <!-- Event: DiagnosticoFinalizado os → billing -->
+  <rect x="412" y="498" width="310" height="30" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="517" text-anchor="middle" font-size="12" font-weight="bold" fill="#EA580C">DiagnosticoFinalizado  →</text>
+  <line x1="390" y1="513" x2="410" y2="513" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aO)"/>
+  <line x1="722" y1="513" x2="742" y2="513" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aO)"/>
+
+  <!-- ============================================================
+       STEP 5 — billing recebe DiagnosticoFinalizado
+  ============================================================ -->
+  <rect x="744" y="484" width="370" height="140" rx="7" fill="white" stroke="#16A34A" stroke-width="1.5"/>
+  <rect x="744" y="484" width="370" height="26" rx="7" fill="#16A34A"/>
+  <rect x="744" y="498" width="370" height="12" fill="#16A34A"/>
+  <text x="929" y="501" text-anchor="middle" font-size="12" font-weight="bold" fill="white">← DiagnosticoFinalizado</text>
+  <text x="762" y="526" font-size="11" fill="#555">1. Para cada peça do evento:</text>
+  <!-- REST arrow billing → inventory -->
+  <text x="762" y="542" font-size="11" fill="#555">   GET /pecas/{id}</text>
+  <line x1="1114" y1="537" x2="1130" y2="537" stroke="#9333EA" stroke-width="1.5" marker-end="url(#aP)"/>
+  <line x1="1388" y1="537" x2="1404" y2="537" stroke="#9333EA" stroke-width="1.5" marker-end="url(#aP)"/>
+  <!-- REST return arrow -->
+  <line x1="1388" y1="553" x2="1116" y2="553" stroke="#9333EA" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aPL)"/>
+  <text x="1260" y="549" text-anchor="middle" font-size="10" fill="#9333EA">← valor da peça</text>
+  <text x="762" y="570" font-size="11" fill="#555">2. Calcula total (MO + peças × qtd)</text>
+  <text x="762" y="586" font-size="11" fill="#555">3. Cria Orçamento:</text>
+  <rect x="762" y="590" width="92" height="20" rx="10" fill="#BE185D"/>
+  <text x="808" y="604" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PENDENTE</text>
+  <text x="860" y="604" font-size="11" fill="#555">valor calculado</text>
+  <text x="762" y="618" font-size="11" fill="#888">envia e-mail ao cliente (se disponível)</text>
+  <circle cx="1096" cy="504" r="14" fill="#1A2340"/>
+  <text x="1096" y="509" text-anchor="middle" font-size="11" font-weight="bold" fill="white">5</text>
+
+  <!-- REST call labels in event column -->
+  <rect x="1136" y="525" width="240" height="40" rx="5" fill="#FAF5FF" stroke="#9333EA" stroke-width="1.5"/>
+  <text x="1256" y="540" text-anchor="middle" font-size="11" font-weight="bold" fill="#9333EA">GET /pecas/{id}  →</text>
+  <text x="1256" y="555" text-anchor="middle" font-size="10" fill="#9333EA">← {id, nome, valor}</text>
+
+  <!-- inventory-service box step 5 -->
+  <rect x="1406" y="484" width="374" height="100" rx="7" fill="white" stroke="#9333EA" stroke-width="1.5"/>
+  <rect x="1406" y="484" width="374" height="26" rx="7" fill="#9333EA"/>
+  <rect x="1406" y="498" width="374" height="12" fill="#9333EA"/>
+  <text x="1593" y="501" text-anchor="middle" font-size="12" font-weight="bold" fill="white">GET /pecas/{id}  →  200</text>
+  <text x="1424" y="526" font-size="11" fill="#555">Endpoint público (sem auth):</text>
+  <text x="1424" y="542" font-size="11" fill="#555">retorna preço unitário da peça</text>
+  <text x="1424" y="558" font-size="11" fill="#888">Ex: Disco de freio → R$ 200,00</text>
+  <text x="1424" y="574" font-size="11" fill="#888">    Amortecedor  → R$ 270,00</text>
+
+  <!-- inventory events: InventoryChecked → os -->
+  <rect x="1136" y="572" width="240" height="30" rx="5" fill="#FAF5FF" stroke="#9333EA" stroke-width="1.5"/>
+  <text x="1256" y="591" text-anchor="middle" font-size="11" font-weight="bold" fill="#9333EA">←  InventoryChecked</text>
+  <line x1="1134" y1="587" x2="1118" y2="587" stroke="#9333EA" stroke-width="1.5" marker-end="url(#aPL)"/>
+  <line x1="722" y1="587" x2="742" y2="587" stroke="#9333EA" stroke-width="1.5"/>
+
+  <!-- os-service receives InventoryChecked -->
+  <rect x="20" y="568" width="370" height="50" rx="7" fill="white" stroke="#9333EA" stroke-width="1.5"/>
+  <text x="38" y="588" font-size="11" fill="#555">← InventoryChecked  (estoque verificado)</text>
+  <rect x="38" y="594" width="102" height="18" rx="9" fill="#0891B2"/>
+  <text x="89" y="607" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_DIAGNOSTICO</text>
+  <text x="147" y="607" font-size="11" fill="#888">mantém status</text>
+
+  <!-- inventory: PecaCompletamenteAlocada event -->
+  <rect x="1136" y="610" width="240" height="30" rx="5" fill="#FAF5FF" stroke="#9333EA" stroke-width="1.5"/>
+  <text x="1256" y="629" text-anchor="middle" font-size="11" font-weight="bold" fill="#9333EA">← PecaAlocada</text>
+  <line x1="1134" y1="625" x2="1118" y2="625" stroke="#9333EA" stroke-width="1.5" marker-end="url(#aPL)"/>
+  <line x1="722" y1="625" x2="742" y2="625" stroke="#9333EA" stroke-width="1.5"/>
+
+  <!-- os-service receives PecaCompletamenteAlocada -->
+  <rect x="20" y="626" width="370" height="34" rx="7" fill="white" stroke="#9333EA" stroke-width="1.5"/>
+  <text x="38" y="643" font-size="11" fill="#555">← PecaCompletamenteAlocada</text>
+  <text x="38" y="655" font-size="11" fill="#888">  peças reservadas no estoque</text>
+
+  <!-- inventory: DeducaoEstoqueFalhou (error path) -->
+  <rect x="1136" y="648" width="240" height="30" rx="5" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="1256" y="667" text-anchor="middle" font-size="11" font-weight="bold" fill="#DC2626">← DeducaoEstoqueFalhou ⚠</text>
+  <line x1="1134" y1="663" x2="1118" y2="663" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aPL)"/>
+  <line x1="722" y1="663" x2="742" y2="663" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,2"/>
+
+  <!-- os-service receives DeducaoEstoqueFalhou -->
+  <rect x="20" y="668" width="370" height="34" rx="7" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="38" y="685" font-size="11" fill="#DC2626">← DeducaoEstoqueFalhou  (path de erro)</text>
+  <text x="38" y="697" font-size="11" fill="#888">  registra falha, notifica admin</text>
+
+  <!-- ============================================================
+       STEP 6 — aprovar orcamento
+  ============================================================ -->
+  <line x1="929" y1="624" x2="929" y2="724" stroke="#16A34A" stroke-width="1.5" marker-end="url(#aG)"/>
+  <text x="942" y="720" font-size="10" fill="#64748B">POST /orcamentos/{osId}/aprovar</text>
+
+  <rect x="744" y="724" width="370" height="72" rx="7" fill="white" stroke="#16A34A" stroke-width="1.5"/>
+  <rect x="744" y="724" width="370" height="26" rx="7" fill="#16A34A"/>
+  <rect x="744" y="738" width="370" height="12" fill="#16A34A"/>
+  <text x="929" y="741" text-anchor="middle" font-size="12" font-weight="bold" fill="white">POST /orcamentos/{osId}/aprovar  →  204</text>
+  <rect x="762" y="758" width="92" height="20" rx="10" fill="#BE185D"/>
+  <text x="808" y="772" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADO</text>
+  <text x="860" y="772" font-size="11" fill="#555">Orçamento aprovado</text>
+  <text x="762" y="788" font-size="11" fill="#888">cliente aprovou o orçamento enviado</text>
+  <circle cx="1096" cy="760" r="14" fill="#1A2340"/>
+  <text x="1096" y="765" text-anchor="middle" font-size="11" font-weight="bold" fill="white">6</text>
+
+  <!-- Event OrcamentoAprovado billing → os -->
+  <rect x="412" y="748" width="310" height="30" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="767" text-anchor="middle" font-size="12" font-weight="bold" fill="#EA580C">←  OrcamentoAprovado</text>
+  <line x1="742" y1="763" x2="724" y2="763" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+  <line x1="410" y1="763" x2="392" y2="763" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+
+  <!-- ============================================================
+       STEP 7 — OS APROVADA
+  ============================================================ -->
+  <line x1="205" y1="702" x2="205" y2="762" stroke="#2563EB" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <rect x="20" y="762" width="370" height="72" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="762" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="776" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="779" text-anchor="middle" font-size="12" font-weight="bold" fill="white">← recebe OrcamentoAprovado</text>
+  <rect x="38" y="796" width="92" height="20" rx="10" fill="#0891B2"/>
+  <text x="84" y="810" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADA</text>
+  <text x="140" y="810" font-size="11" fill="#555">todos serviços → APROVADO</text>
+  <circle cx="372" cy="798" r="14" fill="#1A2340"/>
+  <text x="372" y="803" text-anchor="middle" font-size="11" font-weight="bold" fill="white">7</text>
+
+  <!-- ============================================================
+       STEP 8 — iniciar-servico → EM_EXECUCAO
+  ============================================================ -->
+  <line x1="205" y1="834" x2="205" y2="858" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="851" font-size="10" fill="#64748B">PATCH /iniciar-servico/{execId}</text>
+
+  <rect x="20" y="858" width="370" height="84" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="858" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="872" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="875" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /iniciar-servico/{execId}  →  200</text>
+  <rect x="38" y="892" width="112" height="20" rx="10" fill="#0891B2"/>
+  <text x="94" y="906" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_EXECUCAO</text>
+  <text x="158" y="906" font-size="11" fill="#555">OS em andamento</text>
+  <rect x="38" y="918" width="106" height="18" rx="9" fill="#CA8A04"/>
+  <text x="91" y="931" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_EXECUCAO</text>
+  <text x="152" y="931" font-size="11" fill="#555">cada ExecucaoServico</text>
+  <circle cx="372" cy="900" r="14" fill="#1A2340"/>
+  <text x="372" y="905" text-anchor="middle" font-size="11" font-weight="bold" fill="white">8</text>
+
+  <!-- ============================================================
+       STEP 9 — finalizar-servico → OSEnded
+  ============================================================ -->
+  <line x1="205" y1="942" x2="205" y2="966" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="959" font-size="10" fill="#64748B">PATCH /finalizar-servico/{execId}  (último)</text>
+
+  <rect x="20" y="966" width="370" height="90" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="966" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="980" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="983" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /finalizar-servico/{execId}  →  200</text>
+  <rect x="38" y="1000" width="96" height="20" rx="10" fill="#0891B2"/>
+  <text x="86" y="1014" text-anchor="middle" font-size="10" font-weight="bold" fill="white">FINALIZADA</text>
+  <text x="142" y="1014" font-size="11" fill="#555">todos serviços concluídos</text>
+  <rect x="38" y="1022" width="82" height="18" rx="9" fill="#CA8A04"/>
+  <text x="79" y="1035" text-anchor="middle" font-size="10" font-weight="bold" fill="white">CONCLUIDO</text>
+  <text x="128" y="1035" font-size="11" fill="#555">cada ExecucaoServico</text>
+  <circle cx="372" cy="1011" r="14" fill="#1A2340"/>
+  <text x="372" y="1016" text-anchor="middle" font-size="11" font-weight="bold" fill="white">9</text>
+
+  <!-- Events ServiceEnded + OSEnded os → billing -->
+  <rect x="412" y="978" width="310" height="28" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="996" text-anchor="middle" font-size="11" font-weight="bold" fill="#EA580C">ServiceEnded  →  (cada serviço)</text>
+  <line x1="390" y1="992" x2="410" y2="992" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aO)"/>
+
+  <rect x="412" y="1014" width="310" height="28" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="1032" text-anchor="middle" font-size="12" font-weight="bold" fill="#EA580C">OSEnded  →  (último serviço)</text>
+  <line x1="390" y1="1028" x2="410" y2="1028" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aO)"/>
+  <line x1="722" y1="1028" x2="742" y2="1028" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aO)"/>
+
+  <!-- ============================================================
+       STEP 10 — billing recebe OSEnded → Cobrança
+  ============================================================ -->
+  <rect x="744" y="966" width="370" height="130" rx="7" fill="white" stroke="#16A34A" stroke-width="1.5"/>
+  <rect x="744" y="966" width="370" height="26" rx="7" fill="#16A34A"/>
+  <rect x="744" y="980" width="370" height="12" fill="#16A34A"/>
+  <text x="929" y="983" text-anchor="middle" font-size="12" font-weight="bold" fill="white">← OSEnded  →  EmitirCobrança</text>
+  <text x="762" y="1006" font-size="11" fill="#555">1. Busca Orçamento por osId</text>
+  <text x="762" y="1022" font-size="11" fill="#555">2. Cria Pagamento:</text>
+  <rect x="762" y="1026" width="92" height="20" rx="10" fill="#BE185D"/>
+  <text x="808" y="1040" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PENDENTE</text>
+  <text x="860" y="1040" font-size="11" fill="#555">valor do Orçamento</text>
+  <text x="762" y="1058" font-size="11" fill="#555">3. Cria preferência MercadoPago</text>
+  <text x="762" y="1074" font-size="11" fill="#888">   → retorna checkout_url</text>
+  <text x="762" y="1090" font-size="11" fill="#555">4. Publica CobrancaEmitida</text>
+  <circle cx="1096" cy="996" r="14" fill="#1A2340"/>
+  <text x="1096" y="1001" text-anchor="middle" font-size="11" font-weight="bold" fill="white">10</text>
+
+  <!-- Event CobrancaEmitida billing → os -->
+  <rect x="412" y="1050" width="310" height="28" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="1068" text-anchor="middle" font-size="12" font-weight="bold" fill="#EA580C">←  CobrancaEmitida</text>
+  <line x1="742" y1="1064" x2="724" y2="1064" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+  <line x1="410" y1="1064" x2="392" y2="1064" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+
+  <!-- os-service recebe CobrancaEmitida -->
+  <rect x="20" y="1060" width="370" height="40" rx="7" fill="white" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="38" y="1080" font-size="11" fill="#555">← CobrancaEmitida  →  registra cobrança</text>
+  <text x="38" y="1094" font-size="11" fill="#888">link checkout disponível para o cliente</text>
+
+  <!-- ============================================================
+       STEP 11 — Webhook MercadoPago → PaymentDone
+  ============================================================ -->
+  <line x1="929" y1="1096" x2="929" y2="1118" stroke="#16A34A" stroke-width="1.5" marker-end="url(#aG)"/>
+  <text x="942" y="1112" font-size="10" fill="#64748B">POST /pagamentos/webhook  (MP callback)</text>
+
+  <rect x="744" y="1118" width="370" height="110" rx="7" fill="white" stroke="#16A34A" stroke-width="1.5"/>
+  <rect x="744" y="1118" width="370" height="26" rx="7" fill="#16A34A"/>
+  <rect x="744" y="1132" width="370" height="12" fill="#16A34A"/>
+  <text x="929" y="1135" text-anchor="middle" font-size="12" font-weight="bold" fill="white">POST /pagamentos/webhook  →  200</text>
+  <text x="762" y="1158" font-size="11" fill="#555">1. Valida assinatura x-signature</text>
+  <text x="762" y="1174" font-size="11" fill="#555">2. Consulta status na API MP</text>
+  <text x="762" y="1190" font-size="11" fill="#555">3. Atualiza Pagamento:</text>
+  <rect x="762" y="1194" width="92" height="20" rx="10" fill="#BE185D"/>
+  <text x="808" y="1208" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADO</text>
+  <text x="860" y="1208" font-size="11" fill="#555">payment_id MP</text>
+  <text x="762" y="1222" font-size="11" fill="#555">4. Publica PaymentDone</text>
+  <circle cx="1096" cy="1143" r="14" fill="#1A2340"/>
+  <text x="1096" y="1148" text-anchor="middle" font-size="11" font-weight="bold" fill="white">11</text>
+
+  <!-- Event PaymentDone billing → os -->
+  <rect x="412" y="1190" width="310" height="28" rx="5" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+  <text x="567" y="1208" text-anchor="middle" font-size="12" font-weight="bold" fill="#EA580C">←  PaymentDone</text>
+  <line x1="742" y1="1204" x2="724" y2="1204" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+  <line x1="410" y1="1204" x2="392" y2="1204" stroke="#EA580C" stroke-width="1.5" marker-end="url(#aOL)"/>
+
+  <!-- ============================================================
+       STEP 12 — OS PAGA
+  ============================================================ -->
+  <line x1="205" y1="1100" x2="205" y2="1198" stroke="#2563EB" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <rect x="20" y="1198" width="370" height="72" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="1198" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="1212" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="1215" text-anchor="middle" font-size="12" font-weight="bold" fill="white">← recebe PaymentDone</text>
+  <rect x="38" y="1232" width="56" height="20" rx="10" fill="#0891B2"/>
+  <text x="66" y="1246" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PAGA</text>
+  <text x="102" y="1244" font-size="11" fill="#555">pagamento confirmado MP</text>
+  <text x="102" y="1258" font-size="11" fill="#888">e-mail de confirmação ao cliente</text>
+  <circle cx="372" cy="1234" r="14" fill="#1A2340"/>
+  <text x="372" y="1239" text-anchor="middle" font-size="11" font-weight="bold" fill="white">12</text>
+
+  <!-- ============================================================
+       STEP 13 — ENTREGUE
+  ============================================================ -->
+  <line x1="205" y1="1270" x2="205" y2="1294" stroke="#2563EB" stroke-width="1.5" marker-end="url(#aB)"/>
+  <text x="218" y="1287" font-size="10" fill="#64748B">PATCH /retirar-veiculo</text>
+
+  <rect x="20" y="1294" width="370" height="66" rx="7" fill="white" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="20" y="1294" width="370" height="26" rx="7" fill="#2563EB"/>
+  <rect x="20" y="1308" width="370" height="12" fill="#2563EB"/>
+  <text x="205" y="1311" text-anchor="middle" font-size="12" font-weight="bold" fill="white">PATCH /retirar-veiculo  →  200</text>
+  <rect x="38" y="1328" width="78" height="20" rx="10" fill="#0891B2"/>
+  <text x="77" y="1342" text-anchor="middle" font-size="10" font-weight="bold" fill="white">ENTREGUE</text>
+  <text x="124" y="1340" font-size="11" fill="#555">ciclo da OS encerrado ✓</text>
+  <text x="124" y="1354" font-size="11" fill="#888">e-mail de entrega ao cliente</text>
+  <circle cx="372" cy="1327" r="14" fill="#1A2340"/>
+  <text x="372" y="1332" text-anchor="middle" font-size="11" font-weight="bold" fill="white">13</text>
+
+  <!-- ============================================================
+       SUMMARY PANELS
+  ============================================================ -->
+
+  <!-- OS Status -->
+  <rect x="20" y="1400" width="360" height="340" rx="8" fill="white" stroke="#0891B2" stroke-width="1.5"/>
+  <rect x="20" y="1400" width="360" height="32" rx="8" fill="#0891B2"/>
+  <rect x="20" y="1418" width="360" height="14" fill="#0891B2"/>
+  <text x="200" y="1421" text-anchor="middle" font-size="13" font-weight="bold" fill="white">STATUS — Ordem de Serviço</text>
+  <g transform="translate(38,1442)">
+    <rect x="0" y="0"   width="130" height="20" rx="10" fill="#0891B2"/><text x="65"  y="14" text-anchor="middle" font-size="10" font-weight="bold" fill="white">RECEBIDA</text>         <text x="138" y="14" font-size="10" fill="#555">OS aberta</text>
+    <rect x="0" y="28"  width="148" height="20" rx="10" fill="#0891B2"/><text x="74"  y="42" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_DIAGNOSTICO</text>      <text x="156" y="42" font-size="10" fill="#555">mecânico analisa</text>
+    <rect x="0" y="56"  width="198" height="20" rx="10" fill="#0891B2"/><text x="99"  y="70" text-anchor="middle" font-size="10" font-weight="bold" fill="white">AGUARDANDO_APROVACAO</text><text x="206" y="70" font-size="10" fill="#555">orçamento enviado</text>
+    <rect x="0" y="84"  width="94"  height="20" rx="10" fill="#0891B2"/><text x="47"  y="98" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADA</text>            <text x="102" y="98" font-size="10" fill="#555">cliente aprovou</text>
+    <rect x="0" y="112" width="118" height="20" rx="10" fill="#0891B2"/><text x="59"  y="126" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_EXECUCAO</text>         <text x="126" y="126" font-size="10" fill="#555">serviços em andamento</text>
+    <rect x="0" y="140" width="96"  height="20" rx="10" fill="#0891B2"/><text x="48"  y="154" text-anchor="middle" font-size="10" font-weight="bold" fill="white">FINALIZADA</text>          <text x="104" y="154" font-size="10" fill="#555">todos concluídos</text>
+    <rect x="0" y="168" width="56"  height="20" rx="10" fill="#0891B2"/><text x="28"  y="182" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PAGA</text>                <text x="64"  y="182" font-size="10" fill="#555">pagamento confirmado</text>
+    <rect x="0" y="196" width="82"  height="20" rx="10" fill="#0891B2"/><text x="41"  y="210" text-anchor="middle" font-size="10" font-weight="bold" fill="white">ENTREGUE</text>            <text x="90"  y="210" font-size="10" fill="#555">veículo retirado ✓</text>
+    <rect x="0" y="224" width="90"  height="20" rx="10" fill="#DC2626"/><text x="45"  y="238" text-anchor="middle" font-size="10" font-weight="bold" fill="white">REPROVADA</text>           <text x="98"  y="238" font-size="10" fill="#555">cliente recusou orçamento</text>
+    <line x1="0" y1="256" x2="322" y2="256" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="0" y="274" font-size="10" fill="#888">* APROVADA→EM_EXECUCAO: precisa iniciar cada serviço</text>
+  </g>
+
+  <!-- Servico + Pagamento status -->
+  <rect x="400" y="1400" width="320" height="200" rx="8" fill="white" stroke="#CA8A04" stroke-width="1.5"/>
+  <rect x="400" y="1400" width="320" height="32" rx="8" fill="#CA8A04"/>
+  <rect x="400" y="1418" width="320" height="14" fill="#CA8A04"/>
+  <text x="560" y="1421" text-anchor="middle" font-size="13" font-weight="bold" fill="white">STATUS — ExecucaoServico</text>
+  <g transform="translate(418,1442)">
+    <rect x="0" y="0"  width="90"  height="20" rx="10" fill="#CA8A04"/><text x="45" y="14" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PENDENTE</text>   <text x="98"  y="14" font-size="10" fill="#555">adicionado</text>
+    <rect x="0" y="28" width="90"  height="20" rx="10" fill="#CA8A04"/><text x="45" y="42" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADO</text>   <text x="98"  y="42" font-size="10" fill="#555">aprovado pelo cliente</text>
+    <rect x="0" y="56" width="106" height="20" rx="10" fill="#CA8A04"/><text x="53" y="70" text-anchor="middle" font-size="10" font-weight="bold" fill="white">EM_EXECUCAO</text><text x="114" y="70" font-size="10" fill="#555">mecânico executando</text>
+    <rect x="0" y="84" width="90"  height="20" rx="10" fill="#CA8A04"/><text x="45" y="98" text-anchor="middle" font-size="10" font-weight="bold" fill="white">CONCLUIDO</text>  <text x="98"  y="98" font-size="10" fill="#555">finalizado</text>
+    <rect x="0" y="112" width="84" height="20" rx="10" fill="#DC2626"/><text x="42" y="126" text-anchor="middle" font-size="10" font-weight="bold" fill="white">RECUSADO</text>   <text x="92"  y="126" font-size="10" fill="#555">cliente recusou este serviço</text>
+  </g>
+
+  <rect x="400" y="1618" width="320" height="122" rx="8" fill="white" stroke="#BE185D" stroke-width="1.5"/>
+  <rect x="400" y="1618" width="320" height="32" rx="8" fill="#BE185D"/>
+  <rect x="400" y="1636" width="320" height="14" fill="#BE185D"/>
+  <text x="560" y="1639" text-anchor="middle" font-size="13" font-weight="bold" fill="white">STATUS — Pagamento (MP)</text>
+  <g transform="translate(418,1660)">
+    <rect x="0" y="0"  width="90"  height="20" rx="10" fill="#BE185D"/><text x="45" y="14" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PENDENTE</text>   <text x="98"  y="14" font-size="10" fill="#555">aguardando pagamento</text>
+    <rect x="0" y="28" width="90"  height="20" rx="10" fill="#BE185D"/><text x="45" y="42" text-anchor="middle" font-size="10" font-weight="bold" fill="white">APROVADO</text>   <text x="98"  y="42" font-size="10" fill="#555">pago via checkout MP</text>
+    <rect x="0" y="56" width="98"  height="20" rx="10" fill="#DC2626"/><text x="49" y="70" text-anchor="middle" font-size="10" font-weight="bold" fill="white">CANCELADO</text>  <text x="106" y="70" font-size="10" fill="#555">/ recusado pelo banco</text>
+  </g>
+
+  <!-- Eventos summary -->
+  <rect x="740" y="1400" width="660" height="340" rx="8" fill="white" stroke="#EA580C" stroke-width="1.5"/>
+  <rect x="740" y="1400" width="660" height="32" rx="8" fill="#7C3AED"/>
+  <rect x="740" y="1418" width="660" height="14" fill="#7C3AED"/>
+  <text x="1070" y="1421" text-anchor="middle" font-size="13" font-weight="bold" fill="white">EVENTOS RabbitMQ  —  exchange: lata-velha.events  (routing_key = eventType)</text>
+  <g transform="translate(758,1444)">
+    <!-- os-service -->
+    <rect x="0" y="0" width="144" height="18" rx="4" fill="#EFF6FF"/>
+    <text x="6" y="13" font-size="11" font-weight="bold" fill="#1D4ED8">os-service  →  publica:</text>
+    <rect x="0" y="24" width="168" height="20" rx="10" fill="#2563EB"/><text x="84" y="38" text-anchor="middle" font-size="10" font-weight="bold" fill="white">DiagnosticoFinalizado</text>
+    <text x="176" y="38" font-size="10" fill="#555">→  billing cria Orçamento, consulta preços</text>
+    <rect x="0" y="50" width="102" height="20" rx="10" fill="#2563EB"/><text x="51" y="64" text-anchor="middle" font-size="10" font-weight="bold" fill="white">ServiceEnded</text>
+    <text x="110" y="64" font-size="10" fill="#555">→  (cada serviço finalizado)</text>
+    <rect x="0" y="76" width="78"  height="20" rx="10" fill="#2563EB"/><text x="39" y="90" text-anchor="middle" font-size="10" font-weight="bold" fill="white">OSEnded</text>
+    <text x="86"  y="90" font-size="10" fill="#555">→  billing emite cobrança MP</text>
+    <!-- billing-service -->
+    <rect x="0" y="108" width="156" height="18" rx="4" fill="#F0FDF4"/>
+    <text x="6" y="121" font-size="11" font-weight="bold" fill="#15803D">billing-service  →  publica:</text>
+    <rect x="0" y="128" width="154" height="20" rx="10" fill="#16A34A"/><text x="77" y="142" text-anchor="middle" font-size="10" font-weight="bold" fill="white">OrcamentoAprovado</text>
+    <text x="162" y="142" font-size="10" fill="#555">→  OS muda para APROVADA</text>
+    <rect x="0" y="152" width="138" height="20" rx="10" fill="#16A34A"/><text x="69" y="166" text-anchor="middle" font-size="10" font-weight="bold" fill="white">CobrancaEmitida</text>
+    <text x="146" y="166" font-size="10" fill="#555">→  OS registra cobrança</text>
+    <rect x="0" y="176" width="102" height="20" rx="10" fill="#16A34A"/><text x="51" y="190" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PaymentDone</text>
+    <text x="110" y="190" font-size="10" fill="#555">→  OS muda para PAGA</text>
+    <!-- inventory-service -->
+    <rect x="0" y="212" width="168" height="18" rx="4" fill="#FAF5FF"/>
+    <text x="6" y="225" font-size="11" font-weight="bold" fill="#7E22CE">inventory-service  →  publica:</text>
+    <rect x="0" y="232" width="136" height="20" rx="10" fill="#9333EA"/><text x="68" y="246" text-anchor="middle" font-size="10" font-weight="bold" fill="white">InventoryChecked</text>
+    <text x="144" y="246" font-size="10" fill="#555">→  OS: peças verificadas</text>
+    <rect x="0" y="256" width="198" height="20" rx="10" fill="#9333EA"/><text x="99" y="270" text-anchor="middle" font-size="10" font-weight="bold" fill="white">PecaCompletamenteAlocada</text>
+    <text x="206" y="270" font-size="10" fill="#555">→  OS: peças reservadas</text>
+    <rect x="0" y="280" width="178" height="20" rx="10" fill="#DC2626"/><text x="89" y="294" text-anchor="middle" font-size="10" font-weight="bold" fill="white">DeducaoEstoqueFalhou ⚠</text>
+    <text x="186" y="294" font-size="10" fill="#555">→  OS: falha, notifica admin</text>
+  </g>
+
+  <!-- inventory GET summary -->
+  <rect x="1420" y="1400" width="360" height="160" rx="8" fill="white" stroke="#9333EA" stroke-width="1.5"/>
+  <rect x="1420" y="1400" width="360" height="32" rx="8" fill="#9333EA"/>
+  <rect x="1420" y="1418" width="360" height="14" fill="#9333EA"/>
+  <text x="1600" y="1421" text-anchor="middle" font-size="13" font-weight="bold" fill="white">inventory-service  —  REST API</text>
+  <g transform="translate(1438,1444)">
+    <text x="0" y="14" font-size="11" font-weight="bold" fill="#7E22CE">Endpoint chamado pelo billing (síncrono):</text>
+    <rect x="0" y="20" width="222" height="20" rx="10" fill="#9333EA"/>
+    <text x="111" y="34" text-anchor="middle" font-size="10" font-weight="bold" fill="white">GET /pecas/{id}  →  200  (sem auth)</text>
+    <text x="0" y="56" font-size="11" fill="#555">Retorna: id, nome, valor, ativo</text>
+    <text x="0" y="72" font-size="11" fill="#888">Usado para calcular o total do Orçamento</text>
+    <line x1="0" y1="84" x2="322" y2="84" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="0" y="100" font-size="10" fill="#888">Acesso público (GET) — POST/PUT/DELETE</text>
+    <text x="0" y="114" font-size="10" fill="#888">requerem role USER / MECANICO / ADMIN</text>
+  </g>
+
+  <!-- ===== FOOTER ===== -->
+  <rect x="0" y="2152" width="1800" height="28" fill="#1A2340"/>
+  <text x="900" y="2170" text-anchor="middle" font-size="11" fill="#94A3B8">lata-velha-pos-tech-fiap-mono  ·  Spring Boot 3.2 · Java 21 · RabbitMQ · MercadoPago · PostgreSQL</text>
+</svg>
