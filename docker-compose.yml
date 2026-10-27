@@ -1,0 +1,204 @@
+name: lata-velha-dev
+
+services:
+  os-service:
+    container_name: lata-velha-os-service
+    build: "./os-service"
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-os:5432/lata_velha_os
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      JWT_ISSUER: lata-velha
+      JWT_EXPIRES_IN: "3600"
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      OTEL_EXPORTER_OTLP_ENABLED: "false"
+    depends_on:
+      postgres-os:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lata_velha_dev
+
+  inventory-service:
+    container_name: lata-velha-inventory-service
+    build: "./inventory-service"
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/lata_velha_inventory
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      JWT_ISSUER: lata-velha
+      NOTIFICACOES_ADMIN_EMAILS: ${NOTIFICACOES_ADMIN_EMAILS:-admin@latavelha.com}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      OTEL_EXPORTER_OTLP_ENABLED: "false"
+    depends_on:
+      postgres-inventory:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lata_velha_dev
+
+  billing-service:
+    container_name: lata-velha-billing-service
+    build: "./billing-service"
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-billing:5432/lata_velha_billing
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      MERCADOPAGO_NOTIFICATION_URL: ${MERCADOPAGO_NOTIFICATION_URL:-}
+      MERCADOPAGO_BACK_URL_SUCCESS: ${MERCADOPAGO_BACK_URL_SUCCESS:-}
+      MERCADOPAGO_BACK_URL_FAILURE: ${MERCADOPAGO_BACK_URL_FAILURE:-}
+      MERCADOPAGO_BACK_URL_PENDING: ${MERCADOPAGO_BACK_URL_PENDING:-}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      postgres-billing:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lata_velha_dev
+
+  postgres-os:
+    image: postgres:15
+    container_name: postgres-lata-velha-os
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lata_velha_os
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_os_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d lata_velha_os"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lata_velha_dev
+
+  postgres-inventory:
+    image: postgres:15
+    container_name: postgres-lata-velha-inventory
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lata_velha_inventory
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_inventory_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d lata_velha_inventory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lata_velha_dev
+
+  postgres-billing:
+    image: postgres:15
+    container_name: postgres-lata-velha-billing
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lata_velha_billing
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_billing_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d lata_velha_billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - lata_velha_dev
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: lata-velha-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - lata_velha_dev
+
+volumes:
+  postgres_os_data:
+  postgres_inventory_data:
+  postgres_billing_data:
+  rabbitmq_data:
+
+networks:
+  lata_velha_dev:
