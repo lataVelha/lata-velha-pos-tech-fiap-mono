@@ -1,34 +1,41 @@
 #!/usr/bin/env bash
 #
-# apply.sh — orquestra o apply.sh de cada submódulo, na ordem documentada
-# nos READMEs (infra bootstrap → infra addons → infra-db → lambda → app):
+# apply.sh — orquestra o apply.sh de cada submódulo, na mesma ordem do CI/CD:
 #
-#   (padrão)   [1/5] infra bootstrap (VPC+EKS+ECR) → [2/5] infra addons
-#              (ALB interno + API Gateway vazio + autoscaler) → [3/5] infra-db
-#              (RDS) → [4/5] lambda (auth CPF + authorizer, anexa no API
-#              Gateway) → [5/5] app (deploy, anexa integração ALB + rotas)
-#   --destroy  ordem inversa
-#
-# O API Gateway (infra addons) não depende de mais nenhum repo — cria só o
-# "casco" (API + VPC Link + Stage, sem rotas), por isso roda logo após o
-# bootstrap. Quem anexa rota nele é o próprio lambda (POST /auth/cpf +
-# authorizer) e o próprio app (integração ALB + rotas públicas/protegidas),
-# cada um via terraform_remote_state — nenhum precisa que o infra saiba
-# que eles existem.
+#   (padrão)   infra bootstrap (VPC+EKS)
+#              infra addons (ALB interno + API Gateway + target groups)
+#              infra messaging (SNS/SQS/DLQs)
+#              infra-db (RDS)
+#              lambda (auth CPF + authorizer)
+#              app (opcional — DEPLOY_APP=false pula)
+#              edge (integração + rotas do API Gateway)
+#              os-service
+#              inventory-service
+#              billing-service
+#   --destroy  ordem inversa (edge → billing → inventory → os → app → lambda →
+#              infra-db → infra messaging → infra addons → infra bootstrap)
 #
 # Uso:
 #   ./apply.sh                  — pipeline completo, com confirmação interativa
 #   ./apply.sh --auto           — pipeline completo, sem confirmação
-#   ./apply.sh --skip-tests     — pula os testes Maven do app
+#   ./apply.sh --skip-tests     — pula os testes Maven (app/os/inventory/billing)
+#   ./apply.sh --skip-app       — pula o deploy do app (cutover)
 #   ./apply.sh --destroy        — desfaz tudo, com confirmação
 #   ./apply.sh --destroy --auto — desfaz tudo, sem confirmação
+#
+# Variáveis:
+#   DEPLOY_APP=false   — equivalente a --skip-app
+#   APP_ENABLED=false  — ALB responde 404 para paths não roteados (cutover)
+#   APP_ENABLED=true   — app continua como default action do ALB (default)
+#
+# Rollback de um serviço (sem rebuild): ver docs/RUNBOOK-rollback.md.
+# Cutover do app: ver docs/RUNBOOK-cutover-app.md.
 #
 # Pré-requisitos: ver README.md de cada submódulo (credenciais AWS,
 # terraform.tfvars, etc.) — este script só encadeia os apply.sh existentes.
 
 set -Eeuo pipefail
 
-# --------------------------- saída no terminal ------------------------------
 if [[ -t 1 ]]; then
   C_BLUE=$'\033[1;34m'; C_GREEN=$'\033[1;32m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_DIM=$'\033[2m'; C_RESET=$'\033[0m'
 else
@@ -38,26 +45,39 @@ fi
 STEP_NAMES=()
 STEP_SECONDS=()
 
-# infra, infra-db e lambda só entendem --auto/--destroy; --skip-tests é só do app.
+# infra/infra-db/lambda só entendem --auto/--destroy; --skip-tests é só dos
+# stacks com Maven (app/os/inventory/billing).
 COMMON_ARGS=()
 APP_ARGS=()
 DESTROY=false
 AUTO=false
+DEPLOY_APP="${DEPLOY_APP:-true}"
+APP_ENABLED="${APP_ENABLED:-true}"
 for arg in "$@"; do
   case "$arg" in
     --destroy) DESTROY=true; COMMON_ARGS+=("$arg"); APP_ARGS+=("$arg") ;;
     --auto)    AUTO=true; COMMON_ARGS+=("$arg"); APP_ARGS+=("$arg") ;;
     --skip-tests|--skip-test) APP_ARGS+=("$arg") ;;
+    --skip-app) DEPLOY_APP=false ;;
     *)
       echo "${C_RED}Flag desconhecida: $arg${C_RESET}"
-      echo "Uso: ./apply.sh [--auto] [--skip-tests] [--destroy]"
+      echo "Uso: ./apply.sh [--auto] [--skip-tests] [--skip-app] [--destroy]"
       exit 1
       ;;
   esac
 done
 
+# O infra addons usa APP_ENABLED para decidir se o app continua como default
+# action do ALB (true) ou se paths nao roteados viram 404 (false = cutover).
+export APP_ENABLED
+export TF_VAR_app_enabled="$APP_ENABLED"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOTAL_STEPS=5
+if [[ "$DESTROY" == "true" || "$DEPLOY_APP" == "true" ]]; then
+  TOTAL_STEPS=10
+else
+  TOTAL_STEPS=9
+fi
 CURRENT_STEP=0
 
 on_error() {
@@ -66,9 +86,6 @@ on_error() {
   local failing_step="${STEP_NAMES[$last_idx]:-?}"
   echo
   echo "${C_RED}✗ Pipeline interrompido no passo ${CURRENT_STEP}/${TOTAL_STEPS} (${failing_step}), código de saída ${exit_code}.${C_RESET}"
-  # STEP_SECONDS só ganha uma entrada quando o passo TERMINA — se o passo
-  # que falhou ainda não tem entrada em STEP_SECONDS, os dois arrays têm
-  # tamanhos diferentes aqui, e é isso que decide o que já concluiu.
   if ((${#STEP_SECONDS[@]} > 0)); then
     echo "${C_DIM}  Passos concluídos antes de falhar:${C_RESET}"
     local i
@@ -96,25 +113,38 @@ run_step() {
 
 echo "${C_BLUE}════════════════════════════════════════════════════════════${C_RESET}"
 if [[ "$DESTROY" == "true" ]]; then
-  echo "${C_YELLOW}  MONO REPO — Destruindo TUDO (infra + infra-db + lambda + app)${C_RESET}"
+  echo "${C_YELLOW}  MONO REPO — Destruindo TUDO (ordem inversa: edge → … → bootstrap)${C_RESET}"
 else
-  echo "  MONO REPO — Deploy completo (infra + infra-db + lambda + app)"
+  echo "  MONO REPO — Deploy completo (infra → app opcional → edge → serviços)"
 fi
 [[ "$AUTO" == "true" ]] && echo "${C_DIM}  (--auto: sem confirmação em cada etapa)${C_RESET}"
+[[ "$DEPLOY_APP" == "false" ]] && echo "${C_DIM}  (app desligado: DEPLOY_APP=false)${C_RESET}"
 echo "${C_BLUE}════════════════════════════════════════════════════════════${C_RESET}"
 
 if [[ "$DESTROY" == "true" ]]; then
-  run_step "app (deploy)"              "$SCRIPT_DIR/app/terraform/apply.sh"       "${APP_ARGS[@]}"
-  run_step "lambda (auth CPF)"         "$SCRIPT_DIR/lambda/terraform/apply.sh"    "${COMMON_ARGS[@]}"
-  run_step "infra-db (RDS)"            "$SCRIPT_DIR/infra-db/terraform/apply.sh"  "${COMMON_ARGS[@]}"
-  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
-  run_step "infra bootstrap"           "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --bootstrap-only
+  run_step "edge (rotas API GW)"         "$SCRIPT_DIR/infra/terraform/edge/apply.sh"         "${COMMON_ARGS[@]}"
+  run_step "billing-service"             "$SCRIPT_DIR/billing-service/terraform/apply.sh"   "${APP_ARGS[@]}"
+  run_step "inventory-service"           "$SCRIPT_DIR/inventory-service/terraform/apply.sh" "${APP_ARGS[@]}"
+  run_step "os-service"                  "$SCRIPT_DIR/os-service/terraform/apply.sh"        "${APP_ARGS[@]}"
+  run_step "app (deploy)"                "$SCRIPT_DIR/app/terraform/apply.sh"               "${APP_ARGS[@]}"
+  run_step "lambda (auth CPF)"           "$SCRIPT_DIR/lambda/terraform/apply.sh"            "${COMMON_ARGS[@]}"
+  run_step "infra-db (RDS)"              "$SCRIPT_DIR/infra-db/terraform/apply.sh"          "${COMMON_ARGS[@]}"
+  run_step "infra messaging"             "$SCRIPT_DIR/infra/terraform/messaging/apply.sh"   "${COMMON_ARGS[@]}"
+  run_step "infra addons"                "$SCRIPT_DIR/infra/terraform/apply.sh"             "${COMMON_ARGS[@]}" --addons-only
+  run_step "infra bootstrap"             "$SCRIPT_DIR/infra/terraform/apply.sh"             "${COMMON_ARGS[@]}" --bootstrap-only
 else
-  run_step "infra bootstrap"           "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --bootstrap-only
-  run_step "infra addons"              "$SCRIPT_DIR/infra/terraform/apply.sh"     "${COMMON_ARGS[@]}" --addons-only
-  run_step "infra-db (RDS)"            "$SCRIPT_DIR/infra-db/terraform/apply.sh"  "${COMMON_ARGS[@]}"
-  run_step "lambda (auth CPF)"         "$SCRIPT_DIR/lambda/terraform/apply.sh"    "${COMMON_ARGS[@]}"
-  run_step "app (deploy)"              "$SCRIPT_DIR/app/terraform/apply.sh"       "${APP_ARGS[@]}"
+  run_step "infra bootstrap"             "$SCRIPT_DIR/infra/terraform/apply.sh"             "${COMMON_ARGS[@]}" --bootstrap-only
+  run_step "infra addons"                "$SCRIPT_DIR/infra/terraform/apply.sh"             "${COMMON_ARGS[@]}" --addons-only
+  run_step "infra messaging"             "$SCRIPT_DIR/infra/terraform/messaging/apply.sh"   "${COMMON_ARGS[@]}"
+  run_step "infra-db (RDS)"              "$SCRIPT_DIR/infra-db/terraform/apply.sh"          "${COMMON_ARGS[@]}"
+  run_step "lambda (auth CPF)"           "$SCRIPT_DIR/lambda/terraform/apply.sh"            "${COMMON_ARGS[@]}"
+  if [[ "$DEPLOY_APP" == "true" ]]; then
+    run_step "app (deploy)"              "$SCRIPT_DIR/app/terraform/apply.sh"               "${APP_ARGS[@]}"
+  fi
+  run_step "edge (rotas API GW)"         "$SCRIPT_DIR/infra/terraform/edge/apply.sh"         "${COMMON_ARGS[@]}"
+  run_step "os-service"                  "$SCRIPT_DIR/os-service/terraform/apply.sh"        "${APP_ARGS[@]}"
+  run_step "inventory-service"           "$SCRIPT_DIR/inventory-service/terraform/apply.sh" "${APP_ARGS[@]}"
+  run_step "billing-service"             "$SCRIPT_DIR/billing-service/terraform/apply.sh"   "${APP_ARGS[@]}"
 fi
 
 TOTAL_SECONDS=0

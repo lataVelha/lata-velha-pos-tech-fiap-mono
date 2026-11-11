@@ -1,23 +1,25 @@
 name: CI/CD Mono
 
 # Este workflow é do repo raiz (mono). Cada submódulo (app, infra, infra-db,
-# lambda) tem seu PRÓPRIO CI/CD, no repo dele — este workflow NÃO duplica
-# essa lógica: o job "deploy-*" abaixo CHAMA o workflow reusável de cada
-# repo (uses: OWNER/REPO/.github/workflows/arquivo.yml@master), na ordem
-# certa. Quem sabe COMO fazer deploy de cada parte continua sendo o próprio
-# repo — o mono só decide QUANDO/EM QUE ORDEM.
+# lambda, os-service, inventory-service, billing-service) tem seu PRÓPRIO
+# CI/CD, no repo dele — este workflow NÃO duplica essa lógica: os jobs
+# "deploy-*" chamam o workflow reusável de cada repo
+# (uses: OWNER/REPO/.github/workflows/arquivo.yml@master), na ordem certa.
 #
-# PRÉ-REQUISITO: cada um dos 4 repos submódulo precisa permitir ser chamado
-# de fora em Settings > Actions > General > Access ("Accessible from
-# repositories in the 'lataVelha' organization", ou liberar este repo
-# explicitamente). Sem isso, os jobs "deploy-*" falham com um erro de
-# permissão ao tentar carregar o workflow do outro repo.
+# PRÉ-REQUISITO: cada repo submódulo precisa permitir ser chamado de fora em
+# Settings > Actions > General > Access ("Accessible from repositories in the
+# 'lataVelha' organization" ou liberar este repo explicitamente).
 #
-# Os jobs "destroy-*" (workflow_dispatch com destroy=true) seguem o mesmo
-# padrão: cada workflow reusável dos submódulos também aceita o input
-# "destroy" (mesmo comportamento do "--destroy" que os apply.sh locais já
-# tinham) — o mono só chama cada um com destroy=true, na ordem inversa do
-# deploy.
+# Ordem de deploy:
+#   infra bootstrap → infra addons → infra messaging → infra-db → lambda →
+#   app (opcional) → edge (rotas do API Gateway) →
+#   os-service → inventory-service → billing-service
+#
+# O app é opcional: vars.DEPLOY_APP=false desliga o deploy dele sem alterar
+# o workflow. O edge é o dono único da integração/rotas do API Gateway.
+#
+# Ordem de destroy (workflow_dispatch com destroy=true): a inversa,
+# começando pelo edge.
 
 on:
   push:
@@ -31,6 +33,13 @@ on:
       - "infra-db/**"
       - "lambda"
       - "lambda/**"
+      - "os-service"
+      - "os-service/**"
+      - "inventory-service"
+      - "inventory-service/**"
+      - "billing-service"
+      - "billing-service/**"
+      - "scripts/**"
       - "apply.sh"
       - ".github/workflows/main.yml"
   pull_request:
@@ -38,25 +47,36 @@ on:
   workflow_dispatch:
     inputs:
       destroy:
-        description: "Destruir toda a infraestrutura (infra + infra-db + lambda + app) em vez de aplicar"
+        description: "Destruir toda a topologia na ordem inversa"
         type: boolean
         default: false
+      dry_run:
+        description: "Rodar apenas a validação (sem deploy, apply ou destroy)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Um deploy do mono por vez; nunca cancela o que está em andamento.
+concurrency:
+  group: mono-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ============================================================
   # CI · VALIDAÇÃO
-  # Faz checkout com os submódulos no commit fixado pelo mono repo e
-  # valida cada um: terraform validate (sem state, sem AWS) + testes
-  # Maven do app + testes pytest da lambda. Roda em todo push e PR. Não
-  # aplica nada.
+  # Checkout com submódulos no commit fixado pelo mono e validação de
+  # TODOS os stacks: terraform validate (sem state/AWS) + testes Maven do
+  # app e dos três serviços + pytest da lambda. Roda em todo push e PR.
   # ============================================================
   validate:
     name: "CI · Validação dos submódulos"
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
 
     steps:
       - name: Checkout do código (com submódulos)
@@ -90,6 +110,18 @@ jobs:
           terraform -chdir=infra/terraform/addons init -backend=false
           terraform -chdir=infra/terraform/addons validate
 
+      - name: Terraform validate — infra messaging
+        run: |
+          terraform -chdir=infra/terraform/messaging fmt -check -recursive
+          terraform -chdir=infra/terraform/messaging init -backend=false
+          terraform -chdir=infra/terraform/messaging validate
+
+      - name: Terraform validate — infra edge
+        run: |
+          terraform -chdir=infra/terraform/edge fmt -check -recursive
+          terraform -chdir=infra/terraform/edge init -backend=false
+          terraform -chdir=infra/terraform/edge validate
+
       - name: Terraform validate — infra-db
         run: |
           terraform -chdir=infra-db/terraform/deploy init -backend=false
@@ -105,8 +137,38 @@ jobs:
           terraform -chdir=app/terraform init -backend=false
           terraform -chdir=app/terraform validate
 
+      - name: Terraform validate — os-service
+        run: |
+          terraform -chdir=os-service/terraform fmt -check -recursive
+          terraform -chdir=os-service/terraform init -backend=false
+          terraform -chdir=os-service/terraform validate
+
+      - name: Terraform validate — inventory-service
+        run: |
+          terraform -chdir=inventory-service/terraform fmt -check -recursive
+          terraform -chdir=inventory-service/terraform init -backend=false
+          terraform -chdir=inventory-service/terraform validate
+
+      - name: Terraform validate — billing-service
+        run: |
+          terraform -chdir=billing-service/terraform fmt -check -recursive
+          terraform -chdir=billing-service/terraform init -backend=false
+          terraform -chdir=billing-service/terraform validate
+
       - name: Testes automatizados — app (Maven)
         working-directory: app
+        run: mvn -B test -Dspring.profiles.active=test
+
+      - name: Testes automatizados — os-service (Maven)
+        working-directory: os-service
+        run: mvn -B test -Dspring.profiles.active=test
+
+      - name: Testes automatizados — inventory-service (Maven)
+        working-directory: inventory-service
+        run: mvn -B test -Dspring.profiles.active=test
+
+      - name: Testes automatizados — billing-service (Maven)
+        working-directory: billing-service
         run: mvn -B test -Dspring.profiles.active=test
 
       - name: Testes automatizados — lambda (pytest)
@@ -116,20 +178,15 @@ jobs:
           pytest -q
 
   # ============================================================
-  # CD · DEPLOY COMPLETO — cada job chama o workflow reusável do repo
-  # correspondente. Ordem: infra bootstrap → infra addons → infra-db →
-  # lambda → app. Addons roda logo após o bootstrap (não depende mais de
-  # lambda — o API Gateway que ele cria é só o "casco", sem rotas; quem
-  # anexa rota é o próprio repo lambda/app via terraform_remote_state). Roda
-  # em push pra master ou via workflow_dispatch manual, e só quando NÃO for
-  # um destroy.
+  # CD · DEPLOY — ordem de dependência completa.
   # ============================================================
   deploy-infra-bootstrap:
     name: "CD · infra (bootstrap)"
     needs: validate
     if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/master')
+      github.event.inputs.dry_run != 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master'))
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/bootstrap.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -144,15 +201,28 @@ jobs:
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      app_enabled: ${{ vars.APP_ENABLED != 'false' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_dd_api_key }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_DD_API_KEY }}
+
+  deploy-infra-messaging:
+    name: "CD · infra (messaging SNS/SQS)"
+    needs: deploy-infra-addons
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   deploy-infra-db:
     name: "CD · infra-db"
-    needs: deploy-infra-addons
+    needs: deploy-infra-messaging
     uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -175,8 +245,9 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   deploy-app:
-    name: "CD · app"
+    name: "CD · app (baseline de transição, opcional)"
     needs: deploy-lambda
+    if: vars.DEPLOY_APP != 'false' && github.event.inputs.dry_run != 'true'
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -188,17 +259,143 @@ jobs:
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
       TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
 
+  deploy-os-service:
+    name: "CD · os-service"
+    needs: [deploy-lambda, deploy-infra-messaging, deploy-edge]
+    uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
+  deploy-inventory-service:
+    name: "CD · inventory-service"
+    needs: [deploy-os-service, deploy-infra-messaging]
+    uses: lataVelha/lata-velha-pos-tech-fiap-inventory-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
+  deploy-billing-service:
+    name: "CD · billing-service"
+    needs: [deploy-inventory-service, deploy-infra-messaging]
+    uses: lataVelha/lata-velha-pos-tech-fiap-billing-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
+      TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
   # ============================================================
-  # CD · DESTROY COMPLETO — cada job chama o workflow reusável do repo
-  # correspondente com destroy=true, ordem inversa da NOVA topologia de
-  # dependência: app (usa addons+lambda+infra-db) → lambda (usa
-  # addons+bootstrap+infra-db) → infra-db → infra addons → infra bootstrap.
+  # CD · EDGE — dono único da integração/rotas do API Gateway.
+  # Roda depois do lambda (authorizer) e do app (que, com o código novo,
+  # remove as rotas antigas do próprio state). Se o app estiver desligado
+  # (DEPLOY_APP=false), o edge roda mesmo assim.
+  # ============================================================
+  deploy-edge:
+    name: "CD · edge (rotas do API Gateway)"
+    needs: [deploy-lambda, deploy-app]
+    if: >
+      always() &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.deploy-lambda.result == 'success' &&
+      (needs.deploy-app.result == 'success' || needs.deploy-app.result == 'skipped')
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  # ============================================================
+  # CD · DESTROY — ordem inversa da topologia, começando pelo edge.
   # Só roda via workflow_dispatch manual com destroy=true.
   # ============================================================
-  destroy-app:
-    name: "CD · Destruir · app"
+  destroy-edge:
+    name: "CD · Destruir · edge (rotas do API Gateway)"
     needs: validate
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  destroy-billing-service:
+    name: "CD · Destruir · billing-service"
+    needs: destroy-edge
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
+    uses: lataVelha/lata-velha-pos-tech-fiap-billing-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
+      TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
+  destroy-inventory-service:
+    name: "CD · Destruir · inventory-service"
+    needs: destroy-billing-service
+    uses: lataVelha/lata-velha-pos-tech-fiap-inventory-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
+  destroy-os-service:
+    name: "CD · Destruir · os-service"
+    needs: destroy-inventory-service
+    uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+
+  destroy-app:
+    name: "CD · Destruir · app"
+    needs: destroy-os-service
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -209,6 +406,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
+      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
 
   destroy-lambda:
     name: "CD · Destruir · lambda"
@@ -236,13 +434,26 @@ jobs:
       TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
       TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
 
+  destroy-infra-messaging:
+    name: "CD · Destruir · infra (messaging)"
+    needs: destroy-infra-db
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
   destroy-infra-addons:
     name: "CD · Destruir · infra (addons)"
-    needs: destroy-infra-db
+    needs: destroy-infra-messaging
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
+      app_enabled: ${{ vars.APP_ENABLED != 'false' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -259,3 +470,51 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  # ============================================================
+  # EVIDÊNCIAS — sumário auditável do run (Story 12.4).
+  # Roda sempre, inclusive quando uma etapa anterior falha ou é skipada.
+  # ============================================================
+  summary:
+    name: "CD · Sumário do run"
+    needs:
+      - validate
+      - deploy-app
+      - deploy-os-service
+      - deploy-inventory-service
+      - deploy-billing-service
+      - deploy-edge
+      - destroy-edge
+      - destroy-infra-bootstrap
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Publicar sumário
+        run: |
+          {
+            echo "## Lata Velha — execução do mono"
+            echo ""
+            echo "| campo | valor |"
+            echo "|---|---|"
+            echo "| commit | \`${{ github.sha }}\` |"
+            echo "| evento | \`${{ github.event_name }}\` |"
+            echo "| ref | \`${{ github.ref }}\` |"
+            echo "| destroy | \`${{ github.event.inputs.destroy || 'false' }}\` |"
+            echo "| dry_run | \`${{ github.event.inputs.dry_run || 'false' }}\` |"
+            echo "| DEPLOY_APP | \`${{ vars.DEPLOY_APP || 'true' }}\` |"
+            echo "| APP_ENABLED | \`${{ vars.APP_ENABLED || 'true' }}\` |"
+            echo ""
+            echo "### Jobs"
+            echo ""
+            echo "| job | resultado |"
+            echo "|---|---|"
+            echo "| validate | \`${{ needs.validate.result }}\` |"
+            echo "| deploy-app | \`${{ needs.deploy-app.result }}\` |"
+            echo "| deploy-os-service | \`${{ needs.deploy-os-service.result }}\` |"
+            echo "| deploy-inventory-service | \`${{ needs.deploy-inventory-service.result }}\` |"
+            echo "| deploy-billing-service | \`${{ needs.deploy-billing-service.result }}\` |"
+            echo "| deploy-edge | \`${{ needs.deploy-edge.result }}\` |"
+            echo "| destroy-edge | \`${{ needs.destroy-edge.result }}\` |"
+            echo "| destroy-infra-bootstrap | \`${{ needs.destroy-infra-bootstrap.result }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

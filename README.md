@@ -26,13 +26,13 @@ para os detalhes da arquitetura.
 
 | Repo | O que provisiona/faz |
 | --- | --- |
-| [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno, API Gateway (único ponto de entrada), Cluster Autoscaler |
+| [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno (target groups/listener rules por path), API Gateway (único ponto de entrada), Cluster Autoscaler e o stack `edge` (integração + rotas) |
 | [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL |
 | [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | Login por CPF (`auth-cpf`) e a lambda authorizer, anexadas ao API Gateway do `infra` |
-| [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Monolito original (DDD) + deploy dele no cluster (Deployment/Service/ConfigMap/Secret/HPA/PDB). Ainda é o que o pipeline de produção (`apply.sh`/CI) deploya — ver [separação em andamento](#ambiente-de-desenvolvimento-local-serviços-separados) |
-| [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | `app` separado: domínio de Ordem de Serviço (proprietário, veículo, serviço, OS) + `authentication`. Ainda não faz parte do pipeline de deploy |
-| [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | `app` separado: domínio de Peça/Estoque/PecaAlocada. Ainda não faz parte do pipeline de deploy |
-| [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança das OS integrada ao Mercado Pago (Checkout Pro + Webhooks). Ainda não faz parte do pipeline de deploy |
+| [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Monolito original (DDD) + deploy dele no cluster. **Opcional**: `DEPLOY_APP=false` desliga o deploy durante o cutover |
+| [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | Domínio de Ordem de Serviço + `authentication`, com ECR/state/namespace próprios (`lata-velha-os`, NodePort 30082) e pipeline autônomo |
+| [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | Domínio de Peça/Estoque/PecaAlocada, com ECR/state/namespace próprios (`lata-velha-inventory`, NodePort 30083) e pipeline autônomo |
+| [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança integrada ao Mercado Pago, com pipeline autônomo (`lata-velha-billing`, NodePort 30081) |
 
 `os-service` e `inventory-service` compartilham código genérico (exceções, logging, paginação,
 e-mail) via o submódulo git `shared-kernel` (repo
@@ -43,19 +43,40 @@ dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada servi
 ## Ordem do pipeline
 
 ```
-infra (bootstrap)  →  infra (addons)  →  infra-db  →  lambda  →  app
-  VPC+EKS+ECR           ALB interno +        RDS        auth-cpf +    deploy da
-                        API Gateway vazio                authorizer    aplicação
+infra (bootstrap) → infra (addons) → infra messaging → infra-db → lambda
+  VPC+EKS+ECR        ALB + API GW      SNS/SQS/DLQs       RDS      auth-cpf
+
+→ app (opcional) → edge (rotas) → os-service → inventory-service → billing-service
 ```
+
+O `app` é o baseline de transição e pode ser desligado sem editar o workflow
+(`vars.DEPLOY_APP=false` / `./apply.sh --skip-app`). O `edge` é o dono único
+da integração e das rotas do API Gateway; o ALB roteia por path para os
+serviços. O `billing-service` mantém NLB/API Gateway próprios para o webhook
+do Mercado Pago. O cutover completo está em
+[`docs/RUNBOOK-cutover-app.md`](docs/RUNBOOK-cutover-app.md).
+
+Cada serviço tem **repositório, ECR, state Terraform, namespace e NodePort
+únicos**:
+
+| Serviço | State | Namespace / Deployment | NodePort | ECR |
+|---|---|---|---|---|
+| app | `lata-velha/deploy/terraform.tfstate` | `lata-velha` / `lata-velha-api` | 30080 | `lata-velha` |
+| os-service | `lata-velha/os-service/terraform.tfstate` | `lata-velha-os` / `lata-velha-os` | 30082 | `lata-velha-os-service` |
+| inventory-service | `lata-velha/inventory-service/terraform.tfstate` | `lata-velha-inventory` / `lata-velha-inventory` | 30083 | `lata-velha-inventory-service` |
+| billing-service | `lata-velha/billing-service/terraform.tfstate` | `lata-velha-billing` / `lata-velha-billing` | 30081 | `lata-velha-billing` |
+
+O stack `edge` tem state próprio (`lata-velha/edge/terraform.tfstate`) e não é um serviço: ele
+gerencia a integração/rotas do API Gateway e é aplicado depois do `lambda`.
 
 O `infra` roda em duas etapas (`bootstrap` e `addons`) porque os providers `kubectl`/`helm` do
 `addons` precisam do endpoint do EKS já existindo — não dá pra criar o cluster e configurar esses
 providers na mesma apply. Isso é estrutural (sempre vai precisar de duas chamadas Terraform), mas
-`addons` **não depende de nenhum outro repo** — ele cria só o "casco" do API Gateway (API + VPC
-Link + Stage, sem nenhuma rota) e roda logo em seguida do bootstrap, no mesmo disparo. Quem anexa
-rota nesse Gateway é o próprio `lambda` (`POST /auth/cpf` + authorizer) e o próprio `app`
-(integração com o ALB + rotas públicas/protegidas), cada um lendo o `api_id` via
-`terraform_remote_state` — nenhum deles precisa que o `infra` saiba que eles existem. Detalhes em
+`addons` **não depende de nenhum outro repo** — ele cria o "casco" do API Gateway (API + VPC
+Link + Stage, sem nenhuma rota), o ALB e os target groups/listener rules path-based dos serviços,
+e roda logo em seguida do bootstrap. Quem anexa a integração e as rotas nesse Gateway é o stack
+`edge` (públicas + catch-all protegido), depois do `lambda` (authorizer); o `lambda` anexa apenas
+`POST /auth/cpf`. O `billing-service` mantém seu próprio NLB/API Gateway para o webhook. Detalhes em
 [`infra/README.md`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra#por-que-dois-módulos-terraform-separados-bootstrap-e-addons).
 
 ## Como clonar
@@ -91,14 +112,25 @@ combinados. Cada repo tem seu `terraform.tfvars.example` — copie e edite antes
 ```bash
 ./apply.sh                    # pipeline completo, com confirmação interativa em cada etapa
 ./apply.sh --auto             # pipeline completo, sem confirmação
-./apply.sh --skip-tests       # pula os testes Maven do app
-./apply.sh --destroy          # desfaz tudo, ordem inversa, com confirmação
+./apply.sh --skip-tests       # pula os testes Maven (app/os/inventory/billing)
+./apply.sh --skip-app         # pula o deploy do app (cutover)
+./apply.sh --destroy          # desfaz tudo na ordem inversa, com confirmação
 ./apply.sh --destroy --auto   # desfaz tudo, sem confirmação
 ```
 
+Variáveis de cutover:
+
+```bash
+DEPLOY_APP=false ./apply.sh                          # app nao e deployado (edge + servicos continuam)
+DEPLOY_APP=false APP_ENABLED=false ./apply.sh        # cutover: app fora e 404 para paths nao roteados
+APP_ENABLED=false ./apply.sh --skip-app              # equivalente ao anterior
+```
+
+Rollback de um serviço sem rebuild: ver [`docs/RUNBOOK-rollback.md`](docs/RUNBOOK-rollback.md).
+
 ## Ambiente de desenvolvimento local (serviços separados)
 
-Enquanto o `app` monolítico continua sendo o que vai pra produção (ver seção anterior), este
+O `app` é opcional no pipeline (baseline de transição). Este
 `docker-compose.yml` na raiz sobe **os serviços já separados** — `os-service`,
 `inventory-service` e `billing-service` — junto com os bancos de cada um e um broker de
 eventos (RabbitMQ), pra testar a topologia pós-separação localmente. Não inclui o `app`
@@ -146,26 +178,34 @@ lataVelha/<repo>/.github/workflows/<arquivo>.yml@master`), na ordem do
 
 1. `deploy-infra-bootstrap` → `infra/.github/workflows/bootstrap.yml`
 2. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`
-3. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`
-4. `deploy-lambda` → `lambda/.github/workflows/main.yml`
-5. `deploy-app` → `app/.github/workflows/main.yml`
+3. `deploy-infra-messaging` → `infra/.github/workflows/messaging.yml`
+4. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`
+5. `deploy-lambda` → `lambda/.github/workflows/main.yml`
+6. `deploy-app` → `app/.github/workflows/main.yml` (**opcional**, `vars.DEPLOY_APP=false` desliga)
+7. `deploy-edge` → `infra/.github/workflows/edge.yml`
+8. `deploy-os-service` → `os-service/.github/workflows/main.yml`
+9. `deploy-inventory-service` → `inventory-service/.github/workflows/main.yml`
+10. `deploy-billing-service` → `billing-service/.github/workflows/main.yml`
 
 Um job `validate` roda em todo push e PR: checkout com os submódulos fixados no commit do mono
-repo, `terraform validate` de todos e testes (Maven do `app`, pytest do `lambda`) — sem aplicar
-nada. Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
-disparo manual (`workflow_dispatch`) — os jobs `destroy-*` só rodam via `workflow_dispatch`
-com `destroy: true` (nunca automático).
+repo, `terraform validate` de todos os stacks (incluindo `infra/terraform/messaging` e
+`infra/terraform/edge`) e testes (Maven do `app` e dos três serviços, pytest do `lambda`) — sem
+aplicar nada. Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
+disparo manual (`workflow_dispatch`) — os jobs `destroy-*` só rodam via `workflow_dispatch` com
+`destroy: true` (nunca automático). `dry_run=true` executa apenas a validação; nenhum deploy é
+disparado.
 
-**Pré-requisito:** cada um dos 4 repos submódulo precisa permitir ser chamado de fora, em
+Template e contrato dos workflows: [`docs/service-ci-cd-template.md`](docs/service-ci-cd-template.md).
+
+**Pré-requisito:** cada um dos 7 repos submódulo precisa permitir ser chamado de fora, em
 **Settings → Actions → General → Access** (liberar para a organização/conta `lataVelha` ou para
 este repo especificamente) — como `lataVelha` é uma conta pessoal (não organização), essa
-liberação nem sempre é suficiente sozinha; os 4 repos submódulo estão públicos, o que também
+liberação nem sempre é suficiente sozinha; os repos submódulo estão públicos, o que também
 resolve o acesso cross-repo. Sem isso, os jobs `deploy-*`/`destroy-*` falham com "workflow was
 not found" ao tentar carregar o workflow do outro repo.
 
 **Destroy:** cada submódulo também aceita um input `destroy` no próprio `workflow_call` (mesmo
 padrão do `--destroy` que os `apply.sh` locais já tinham) — o job `workflow_dispatch` com
-`destroy: true` chama os mesmos 5 workflows reusáveis do deploy, só que com `destroy: true`, na
-ordem inversa da **nova** topologia de dependência: `app → lambda → infra-db → infra (addons) →
-infra (bootstrap)` (app e lambda dependem do `api_id` que o `addons` criou, então têm que ser
-destruídos antes dele).
+`destroy: true` chama os workflows reusáveis na ordem inversa:
+`edge → billing → inventory → os → app → lambda → infra-db → infra messaging → infra (addons) →
+infra (bootstrap)`.

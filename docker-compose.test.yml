@@ -1,0 +1,20 @@
+# Infra de teste local do barramento (Story 15.2) — SNS/SQS.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   LOCALSTACK_ENDPOINT=http://localhost:4566 ./scripts/test-sqs.sh
+#   docker compose -f docker-compose.test.yml down -v
+#
+# Não usa credenciais AWS reais.
+services:
+  localstack:
+    image: localstack/localstack:3.8
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sns,sqs,cloudwatch
+      DEBUG: "0"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

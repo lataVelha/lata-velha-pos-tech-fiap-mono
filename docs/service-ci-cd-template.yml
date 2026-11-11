@@ -1,0 +1,365 @@
+# Template de workflow reutilizável dos microsserviços (Story 10.2).
+#
+# Copie este arquivo para `<servico>/.github/workflows/main.yml` e substitua
+# os placeholders da matriz de identidade:
+#   __SERVICE_REPO__   ex.: lataVelha/lata-velha-pos-tech-fiap-os-service
+#   __ECR_REPO__       ex.: lata-velha-os-service
+#   __SERVICE_NAME__   ex.: lata-velha-os
+#   __NAMESPACE__      ex.: lata-velha-os
+#   __CONCURRENCY__    ex.: deploy-os
+#   __STATE_KEY__      ex.: lata-velha/os-service/terraform.tfstate
+#   __NODE_PORT__      ex.: 30082
+#   __SERVICE_LABEL__  ex.: os-service
+name: CI/CD __SERVICE_LABEL__
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - "Dockerfile"
+      - "terraform/**"
+      - "k8s/**"
+      - "scripts/**"
+      - ".github/workflows/main.yml"
+      - "shared-kernel"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: "Destruir apenas os recursos deste serviço"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Rodar apenas o terraform plan (sem aplicar)"
+        type: boolean
+        default: false
+      image_tag:
+        description: "Tag da imagem a reutilizar (rollback). Vazio = SHA do commit"
+        type: string
+        required: false
+  workflow_call:
+    inputs:
+      aws_region:
+        description: "Região AWS"
+        type: string
+        required: false
+      destroy:
+        description: "Destruir apenas os recursos deste serviço"
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: "Rodar apenas o terraform plan (sem aplicar)"
+        type: boolean
+        required: false
+        default: false
+      image_tag:
+        description: "Tag da imagem a reutilizar (rollback)"
+        type: string
+        required: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_SESSION_TOKEN:
+        required: false
+      TF_MAIL_USERNAME:
+        required: false
+      TF_MAIL_PASSWORD:
+        required: false
+      TF_DD_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SERVICE_NAME: "__SERVICE_NAME__"
+  NAMESPACE: "__NAMESPACE__"
+  ECR_REPO_NAME: "__ECR_REPO__"
+  STATE_KEY: "__STATE_KEY__"
+  CLUSTER_NAME: "${{ vars.CLUSTER_NAME || 'lata-velha-eks' }}"
+  HEALTH_PATH: "/actuator/health"
+
+jobs:
+  test:
+    name: "CI · Testes"
+    if: inputs.destroy != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || '__SERVICE_REPO__' }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'master' }}
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: corretto
+          cache: maven
+      - name: mvn test
+        run: mvn -B test -Dspring.profiles.active=test
+
+  validate:
+    name: "CI · Terraform validate"
+    if: inputs.destroy != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || '__SERVICE_REPO__' }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'master' }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+      - name: terraform fmt/validate
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+  build:
+    name: "CD · Build & push → ECR"
+    needs: [test, validate]
+    if: >
+      inputs.destroy != true && inputs.dry_run != true &&
+      (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: '__SERVICE_REPO__'
+          ref: master
+          submodules: recursive
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+      - name: Validar credenciais AWS
+        run: aws sts get-caller-identity
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+      - name: Resolver dados do cluster/state
+        working-directory: terraform
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "TF_VAR_state_bucket=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
+          echo "TF_VAR_region=${REGION}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_name=${CLUSTER_NAME}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_endpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.endpoint' --output text)" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_ca_data=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.certificateAuthority.data' --output text)" >> $GITHUB_ENV
+      - name: Garantir repositório ECR (apply direcionado)
+        working-directory: terraform
+        env:
+          TF_VAR_docker_image: "dummy"
+          TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME || 'dummy' }}
+          TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD || 'dummy' }}
+          TF_VAR_dd_api_key: ${{ secrets.TF_DD_API_KEY }}
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${TF_VAR_state_bucket}" \
+            -backend-config="region=${REGION}"
+          terraform apply -auto-approve \
+            -target=aws_ecr_repository.__ECR_TF_NAME__ \
+            -target=aws_ecr_lifecycle_policy.__ECR_TF_NAME__
+          terraform output -raw ecr_repository_url > "$RUNNER_TEMP/ecr_url"
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+      - name: Definir tag da imagem
+        id: meta
+        run: |
+          ECR_URL=$(cat "$RUNNER_TEMP/ecr_url")
+          echo "image=${ECR_URL}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+      - name: Build e push da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  tf-plan:
+    name: "CI · Terraform plan (dry-run)"
+    needs: [test, validate]
+    if: github.event_name == 'pull_request' || inputs.dry_run == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_docker_image: "dummy"
+      TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME || 'dummy' }}
+      TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD || 'dummy' }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_DD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || '__SERVICE_REPO__' }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'master' }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+      - name: terraform plan
+        working-directory: terraform
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          export TF_VAR_state_bucket="lata-velha-tfstate-${ACCOUNT_ID}"
+          export TF_VAR_region="${REGION}"
+          export TF_VAR_cluster_name="${CLUSTER_NAME}"
+          export TF_VAR_cluster_endpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.endpoint' --output text)
+          export TF_VAR_cluster_ca_data=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.certificateAuthority.data' --output text)
+          terraform init -reconfigure -backend-config="bucket=${TF_VAR_state_bucket}" -backend-config="region=${REGION}"
+          terraform plan -detailed-exitcode -out=tfplan
+
+  tf-deploy:
+    name: "CD · Deploy"
+    needs: build
+    if: inputs.dry_run != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: __CONCURRENCY__
+      cancel-in-progress: false
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_docker_image: ${{ needs.build.outputs.image }}
+      TF_VAR_mail_username: ${{ secrets.TF_MAIL_USERNAME || 'dummy' }}
+      TF_VAR_mail_password: ${{ secrets.TF_MAIL_PASSWORD || 'dummy' }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_DD_API_KEY }}
+      TF_VAR_node_port: __NODE_PORT__
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: '__SERVICE_REPO__'
+          ref: master
+          submodules: recursive
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+      - name: Validar credenciais AWS
+        run: aws sts get-caller-identity
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+      - name: Resolver bucket de estado e dados do cluster EKS
+        working-directory: terraform
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "TF_VAR_state_bucket=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
+          echo "TF_VAR_region=${REGION}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_name=${CLUSTER_NAME}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_endpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.endpoint' --output text)" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_ca_data=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.certificateAuthority.data' --output text)" >> $GITHUB_ENV
+      - name: Terraform Init + Apply
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${TF_VAR_state_bucket}" \
+            -backend-config="region=${REGION}"
+          terraform apply -auto-approve
+          echo "state_key: __STATE_KEY__" >> "$GITHUB_STEP_SUMMARY"
+          echo "image: ${TF_VAR_docker_image}" >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: "CD · Verificação"
+    needs: tf-deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: '__SERVICE_REPO__'
+          ref: master
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+      - uses: azure/setup-kubectl@v4
+      - name: Configurar kubeconfig
+        run: aws eks update-kubeconfig --region ${REGION} --name ${CLUSTER_NAME}
+      - name: Rollout + smoke test
+        env:
+          SERVICE: "__SERVICE_NAME__"
+          NAMESPACE: "__NAMESPACE__"
+          HEALTH_PATH: "/actuator/health"
+          EXPECTED_MESSAGE: "serviço=__SERVICE_LABEL__ namespace=__NAMESPACE__ url=http://__SERVICE_NAME__.__NAMESPACE__.svc.cluster.local/actuator/health"
+        run: bash scripts/smoke-test.sh
+
+  destroy:
+    name: "CD · Destroy"
+    if: inputs.destroy == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: __CONCURRENCY__
+      cancel-in-progress: false
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_docker_image: "dummy"
+      TF_VAR_mail_username: "dummy"
+      TF_VAR_mail_password: "dummy"
+      TF_VAR_dd_api_key: "dummy"
+      TF_VAR_node_port: __NODE_PORT__
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: '__SERVICE_REPO__'
+          ref: master
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+      - name: Resolver bucket de estado e dados do cluster EKS
+        working-directory: terraform
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "TF_VAR_state_bucket=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
+          echo "TF_VAR_region=${REGION}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_name=${CLUSTER_NAME}" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_endpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.endpoint' --output text)" >> $GITHUB_ENV
+          echo "TF_VAR_cluster_ca_data=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query 'cluster.certificateAuthority.data' --output text)" >> $GITHUB_ENV
+      - name: Terraform Destroy
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${TF_VAR_state_bucket}" \
+            -backend-config="region=${REGION}"
+          terraform destroy -auto-approve -lock-timeout=0
+          echo "destroyed: __SERVICE_NAME__" >> "$GITHUB_STEP_SUMMARY"
