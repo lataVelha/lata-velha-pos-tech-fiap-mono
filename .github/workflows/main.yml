@@ -206,7 +206,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_VAR_dd_api_key: ${{ secrets.TF_DD_API_KEY }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   deploy-infra-messaging:
     name: "CD · infra (messaging SNS/SQS)"
@@ -257,7 +257,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   deploy-os-service:
     name: "CD · os-service"
@@ -273,7 +273,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   deploy-inventory-service:
     name: "CD · inventory-service"
@@ -289,7 +289,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   deploy-billing-service:
     name: "CD · billing-service"
@@ -305,7 +305,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
       TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   # ============================================================
   # CD · EDGE — dono único da integração/rotas do API Gateway.
@@ -361,7 +361,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
       TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   destroy-inventory-service:
     name: "CD · Destruir · inventory-service"
@@ -376,7 +376,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   destroy-os-service:
     name: "CD · Destruir · os-service"
@@ -391,7 +391,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   destroy-app:
     name: "CD · Destruir · app"
@@ -406,7 +406,7 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_DD_API_KEY }}
+      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   destroy-lambda:
     name: "CD · Destruir · lambda"
