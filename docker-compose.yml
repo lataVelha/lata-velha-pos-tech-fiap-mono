@@ -95,10 +95,19 @@ services:
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
+      INVENTORY_SERVICE_BASE_URL: http://lata-velha-inventory-service:8080
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@latavelha.com.br}
+      OTEL_EXPORTER_OTLP_ENABLED: "false"
     depends_on:
       postgres-billing:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      inventory-service:
         condition: service_healthy
     ports:
       - "8081:8081"

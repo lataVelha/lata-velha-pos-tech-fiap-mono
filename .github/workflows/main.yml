@@ -1,7 +1,7 @@
 name: CI/CD Mono
 
-# Este workflow é do repo raiz (mono). Cada submódulo (app, infra, infra-db,
-# lambda, os-service, inventory-service, billing-service) tem seu PRÓPRIO
+# Este workflow é do repo raiz (mono). Cada submódulo (infra, lambda,
+# os-service, inventory-service, billing-service) tem seu PRÓPRIO
 # CI/CD, no repo dele — este workflow NÃO duplica essa lógica: os jobs
 # "deploy-*" chamam o workflow reusável de cada repo
 # (uses: OWNER/REPO/.github/workflows/arquivo.yml@master), na ordem certa.
@@ -11,26 +11,16 @@ name: CI/CD Mono
 # 'lataVelha' organization" ou liberar este repo explicitamente).
 #
 # Ordem de deploy:
-#   infra bootstrap → (infra addons ‖ infra messaging ‖ infra-db) →
+#   infra bootstrap → (infra addons ‖ infra messaging) →
 #     ├── lambda → edge (rotas do API Gateway)
-#     └── app (opcional) ‖ os-service ‖ inventory-service ‖ billing-service
+#     └── os-service ‖ inventory-service ‖ billing-service
 #
-# Paralelismo (tudo dentro do mesmo run, portanto concorrente):
-#   1. addons ‖ messaging ‖ infra-db — states S3 independentes, os três só
+# Paralelismo:
+#   1. addons ‖ messaging — states S3 independentes, os dois só
 #      precisam do bootstrap (VPC/subnets/EKS).
-#   2. lambda ‖ app ‖ os ‖ inventory ‖ billing — cada workload depende só dos
-#      states que lê (app→infra-db; os/inventory→infra-db+messaging;
-#      billing→messaging). Nenhum depende do lambda nem do edge.
+#   2. lambda ‖ os ‖ inventory ‖ billing — cada workload depende só dos
+#      states que lê (os/inventory/billing→messaging). Nenhum depende do edge.
 #   3. edge depois do lambda, porque lê o state do lambda (authorizer).
-#
-# PRÉ-REQUISITO do item 2: folga de nodes no cluster (node_max_size=8 no
-# bootstrap). Com o teto antigo (4 nodes t3.small) os 4 rollouts simultâneos
-# não caberiam e o provider kubectl estouraria por pod Pending. Observação:
-# a falha de 617s vista no os-service NÃO era capacidade — era Flyway/schema
-# no RDS compartilhado (por isso o db_schema dedicado no os-service).
-#
-# O app é opcional: vars.DEPLOY_APP=false desliga o deploy dele sem alterar
-# o workflow. O edge é o dono único da integração/rotas do API Gateway.
 #
 # Ordem de destroy (workflow_dispatch com destroy=true): a inversa,
 # começando pelo edge.
@@ -39,12 +29,8 @@ on:
   push:
     branches: [master]
     paths:
-      - "app"
-      - "app/**"
       - "infra"
       - "infra/**"
-      - "infra-db"
-      - "infra-db/**"
       - "lambda"
       - "lambda/**"
       - "os-service"
@@ -85,18 +71,6 @@ concurrency:
 jobs:
   # ============================================================
   # CI · VALIDAÇÃO (matrizes independentes)
-  # Checkout com submódulos no commit fixado pelo mono e validação de
-  # TODOS os stacks: terraform validate (sem state/AWS) + testes Maven do
-  # app e dos três serviços + pytest da lambda. Roda em todo push e PR.
-  #
-  # Antes era UM job com 9 validates + 4 Maven + pytest em série (~5min35s
-  # medidos). Agora cada stack é um job independente e o tempo total passa a
-  # ser o da tarefa mais lenta (~1min30s) em vez da soma.
-  #
-  # O job `validate` continua existindo como AGREGADOR: é ele que os jobs de
-  # deploy e o `summary` referenciam em `needs`, então o grafo de CD não muda
-  # — e um erro em qualquer matriz reprova o agregador, mantendo exatamente
-  # o mesmo comportamento de antes (deploy abortado se a CI falhar).
   # ============================================================
   validate-terraform:
     name: "CI · Terraform validate (${{ matrix.name }})"
@@ -105,8 +79,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `fmt: true` só nos stacks que já rodavam fmt -check (comportamento
-        # preservado — não adicionamos fmt onde ele não rodava).
         include:
           - name: infra bootstrap + addons
             dirs: "infra/terraform/bootstrap infra/terraform/addons"
@@ -117,14 +89,8 @@ jobs:
           - name: infra edge
             dirs: "infra/terraform/edge"
             fmt: true
-          - name: infra-db
-            dirs: "infra-db/terraform/deploy"
-            fmt: false
           - name: lambda
             dirs: "lambda/terraform/deploy"
-            fmt: false
-          - name: app
-            dirs: "app/terraform"
             fmt: false
           - name: os-service
             dirs: "os-service/terraform"
@@ -169,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [app, os-service, inventory-service, billing-service]
+        service: [os-service, inventory-service, billing-service]
 
     steps:
       - name: Checkout do código (com submódulos)
@@ -183,8 +149,6 @@ jobs:
           java-version: "21"
           distribution: corretto
           cache: maven
-          # Chave de cache por serviço: sem isso os 4 jobs disputam a mesma
-          # chave (`**/pom.xml`) e só o primeiro que termina salva o .m2.
           cache-dependency-path: ${{ matrix.service }}/pom.xml
 
       - name: Testes automatizados — ${{ matrix.service }} (Maven)
@@ -268,7 +232,6 @@ jobs:
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      app_enabled: ${{ vars.APP_ENABLED != 'false' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -277,10 +240,6 @@ jobs:
 
   deploy-infra-messaging:
     name: "CD · infra (messaging SNS/SQS)"
-    # Depende só do bootstrap: o módulo messaging tem state próprio, não lê
-    # o state dos addons e (com o default enable_irsa=false) nem toca no EKS.
-    # Por isso roda em paralelo com addons/infra-db — antes estava serial e
-    # atrasava o pipeline em ~2min25s.
     needs: deploy-infra-bootstrap
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
     with:
@@ -291,29 +250,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
-  deploy-infra-db:
-    name: "CD · infra-db"
-    # Depende só do bootstrap (VPC/subnets). Roda em PARALELO com addons e
-    # messaging: state próprio (lata-velha/infra-db) e nenhum recurso
-    # compartilhado com eles. O RDS é o passo mais lento (~7min) e agora
-    # acontece junto com o ALB/API Gateway em vez de depois.
-    needs: deploy-infra-bootstrap
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
-      TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
-
   deploy-lambda:
     name: "CD · lambda"
-    # Precisa dos DOIS states: infra-db (endpoint/credenciais do RDS) e addons
-    # (API Gateway onde o POST /auth/cpf é anexado). Como addons e infra-db
-    # agora rodam em paralelo, a espera é explícita aqui.
-    needs: [deploy-infra-addons, deploy-infra-db]
+    needs: deploy-infra-addons
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -323,39 +262,12 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   # ============================================================
-  # CD · WORKLOADS — app, os, inventory e billing rodam EM PARALELO.
+  # CD · WORKLOADS — os, inventory e billing rodam EM PARALELO.
   # Cada um depende só dos states que realmente lê:
-  #   app         → infra-db              (terraform_remote_state.infra_db)
-  #   os/inventory→ infra-db + messaging
-  #   billing     → messaging
-  # Nenhum lê o state do lambda nem do edge (o `app` não tem mais recursos de
-  # API Gateway — a rota antiga saiu junto com o stack edge). O edge continua
-  # sendo o último, depois do lambda (authorizer).
-  #
-  # Folga de nodes: com o teto antigo (4 nodes t3.small) os 4 rollouts
-  # simultâneos (até 12 pods x 512Mi com maxSurge, maxUnavailable=0) não
-  # caberiam — o bootstrap agora usa node_max_size=8 / min=2 / desired=3.
-  # Isso é MARGEM, não a causa do timeout de 617s observado: aquele era
-  # Flyway/schema no RDS compartilhado (ver db_schema no os-service).
+  #   os/inventory/billing → messaging
   # ============================================================
-  deploy-app:
-    name: "CD · app (baseline de transição, opcional)"
-    needs: deploy-infra-db
-    if: vars.DEPLOY_APP != 'false' && github.event.inputs.dry_run != 'true'
-    uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
-      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
-
   deploy-os-service:
     name: "CD · os-service"
-    # os-service tem RDS proprio (rds.tf); nao depende mais do infra-db.
     needs: [deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
     with:
@@ -372,7 +284,7 @@ jobs:
 
   deploy-inventory-service:
     name: "CD · inventory-service"
-    needs: [deploy-infra-db, deploy-infra-messaging]
+    needs: deploy-infra-messaging
     uses: lataVelha/lata-velha-pos-tech-fiap-inventory-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -388,8 +300,7 @@ jobs:
 
   deploy-billing-service:
     name: "CD · billing-service"
-    # billing-service ja tem RDS proprio (rds.tf).
-    needs: [deploy-infra-messaging]
+    needs: deploy-infra-messaging
     uses: lataVelha/lata-velha-pos-tech-fiap-billing-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -405,10 +316,6 @@ jobs:
 
   # ============================================================
   # CD · EDGE — dono único da integração/rotas do API Gateway.
-  # Depende SÓ do lambda (authorizer) + addons, e o edge.yml lê exatamente
-  # esses dois states (addons + lambda). Antes ele também esperava o `app`,
-  # mas o app/terraform não tem recurso de API Gateway — era acoplamento
-  # obsoleto que só atrasava o run.
   # ============================================================
   deploy-edge:
     name: "CD · edge (rotas do API Gateway)"
@@ -489,24 +396,9 @@ jobs:
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
       TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
-  destroy-app:
-    name: "CD · Destruir · app"
-    needs: destroy-os-service
-    uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      destroy: true
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
-      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
-      TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
-
   destroy-lambda:
     name: "CD · Destruir · lambda"
-    needs: destroy-app
+    needs: destroy-os-service
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -516,23 +408,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
-  destroy-infra-db:
-    name: "CD · Destruir · infra-db"
-    needs: destroy-lambda
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      destroy: true
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_DB_USERNAME: ${{ secrets.TF_DB_USERNAME }}
-      TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
-
   destroy-infra-messaging:
     name: "CD · Destruir · infra (messaging)"
-    needs: destroy-infra-db
+    needs: destroy-lambda
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -549,7 +427,6 @@ jobs:
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
-      app_enabled: ${{ vars.APP_ENABLED != 'false' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -568,14 +445,12 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   # ============================================================
-  # EVIDÊNCIAS — sumário auditável do run (Story 12.4).
-  # Roda sempre, inclusive quando uma etapa anterior falha ou é skipada.
+  # EVIDÊNCIAS — sumário auditável do run.
   # ============================================================
   summary:
     name: "CD · Sumário do run"
     needs:
       - validate
-      - deploy-app
       - deploy-os-service
       - deploy-inventory-service
       - deploy-billing-service
@@ -598,15 +473,12 @@ jobs:
             echo "| ref | \`${{ github.ref }}\` |"
             echo "| destroy | \`${{ github.event.inputs.destroy || 'false' }}\` |"
             echo "| dry_run | \`${{ github.event.inputs.dry_run || 'false' }}\` |"
-            echo "| DEPLOY_APP | \`${{ vars.DEPLOY_APP || 'true' }}\` |"
-            echo "| APP_ENABLED | \`${{ vars.APP_ENABLED || 'true' }}\` |"
             echo ""
             echo "### Jobs"
             echo ""
             echo "| job | resultado |"
             echo "|---|---|"
             echo "| validate | \`${{ needs.validate.result }}\` |"
-            echo "| deploy-app | \`${{ needs.deploy-app.result }}\` |"
             echo "| deploy-os-service | \`${{ needs.deploy-os-service.result }}\` |"
             echo "| deploy-inventory-service | \`${{ needs.deploy-inventory-service.result }}\` |"
             echo "| deploy-billing-service | \`${{ needs.deploy-billing-service.result }}\` |"

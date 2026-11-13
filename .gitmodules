@@ -1,12 +1,6 @@
-[submodule "app"]
-	path = app
-	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap.git
 [submodule "lambda"]
 	path = lambda
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda.git
-[submodule "infra-db"]
-	path = infra-db
-	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db.git
 [submodule "infra"]
 	path = infra
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra.git
