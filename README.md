@@ -27,10 +27,10 @@ para os detalhes da arquitetura.
 | Repo | O que provisiona/faz |
 | --- | --- |
 | [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno (target groups/listener rules por path), API Gateway (único ponto de entrada), Cluster Autoscaler e o stack `edge` (integração + rotas) |
-| [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL |
+| [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL compartilhado do legado (`app`/lambda) — os microsserviços Postgres têm RDS próprio |
 | [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | Login por CPF (`auth-cpf`) e a lambda authorizer, anexadas ao API Gateway do `infra` |
 | [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Monolito original (DDD) + deploy dele no cluster. **Opcional**: `DEPLOY_APP=false` desliga o deploy durante o cutover |
-| [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | Domínio de Ordem de Serviço + `authentication`, com ECR/state/namespace próprios (`lata-velha-os`, NodePort 30082) e pipeline autônomo |
+| [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | Domínio de Ordem de Serviço + `authentication`, com ECR/state/namespace/RDS próprios (`lata-velha-os`, NodePort 30082) e pipeline autônomo |
 | [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | Domínio de Peça/Estoque/PecaAlocada, com ECR/state/namespace próprios (`lata-velha-inventory`, NodePort 30083) e pipeline autônomo |
 | [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança integrada ao Mercado Pago, com pipeline autônomo (`lata-velha-billing`, NodePort 30081) |
 
@@ -57,9 +57,10 @@ Três blocos rodam em paralelo, cada um com state Terraform próprio:
 
 1. `addons ‖ messaging ‖ infra-db` — dependem só do bootstrap (VPC/subnets/EKS).
 2. `app ‖ os-service ‖ inventory-service ‖ billing-service` — cada workload lê
-   apenas os states que precisa (`app` → `infra-db`; `os`/`inventory` →
-   `infra-db` + `messaging`; `billing` → `messaging`). Nenhum lê o state do
-   lambda nem do edge.
+   apenas os states que precisa (`app` → `infra-db`; `os` → `messaging`;
+   `inventory` → `infra-db` + `messaging`; `billing` → `messaging`).
+   `os-service` e `billing-service` provisionam o próprio RDS; nenhum lê o
+   state do lambda nem do edge.
 3. `edge` fecha a borda depois do `lambda`, porque lê o state do lambda
    (authorizer) + addons.
 
@@ -68,7 +69,9 @@ Três blocos rodam em paralelo, cada um com state Terraform próprio:
 > nodes `t3.small`. O bootstrap passou a usar `node_max_size = 8`,
 > `node_min_size = 2` e `node_desired_size = 3`. A falha de 617s vista no
 > `os-service` **não** era capacidade: era colisão de Flyway/schema no RDS
-> compartilhado (o `app` usa `public`), resolvida com `db_schema` dedicado.
+> compartilhado (o `app` usa `public`). O os-service agora tem **RDS próprio**
+> (`terraform/rds.tf`, database `lata_velha_os`), então o problema não volta
+> mesmo com o app no ar.
 
 O `app` é o baseline de transição e pode ser desligado sem editar o workflow
 (`vars.DEPLOY_APP=false` / `./apply.sh --skip-app`). O `edge` é o dono único
@@ -86,6 +89,10 @@ Cada serviço tem **repositório, ECR, state Terraform, namespace e NodePort
 | os-service | `lata-velha/os-service/terraform.tfstate` | `lata-velha-os` / `lata-velha-os` | 30082 | `lata-velha-os-service` |
 | inventory-service | `lata-velha/inventory-service/terraform.tfstate` | `lata-velha-inventory` / `lata-velha-inventory` | 30083 | `lata-velha-inventory-service` |
 | billing-service | `lata-velha/billing-service/terraform.tfstate` | `lata-velha-billing` / `lata-velha-billing` | 30081 | `lata-velha-billing` |
+
+Os serviços Postgres (`os-service` e `billing-service`) têm **RDS próprio** (database-per-service).
+O `inventory-service` usa MongoDB/Mongock e ainda não tem um banco provisionado na AWS
+(DocumentDB/Mongo é um gap conhecido); o `infra-db` permanece apenas para o legado `app`/lambda.
 
 O stack `edge` tem state próprio (`lata-velha/edge/terraform.tfstate`) e não é um serviço: ele
 gerencia a integração/rotas do API Gateway e é aplicado depois do `lambda`.

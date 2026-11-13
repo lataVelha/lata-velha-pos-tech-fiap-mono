@@ -355,7 +355,8 @@ jobs:
 
   deploy-os-service:
     name: "CD · os-service"
-    needs: [deploy-infra-db, deploy-infra-messaging]
+    # os-service tem RDS proprio (rds.tf); nao depende mais do infra-db.
+    needs: [deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -387,7 +388,8 @@ jobs:
 
   deploy-billing-service:
     name: "CD · billing-service"
-    needs: [deploy-infra-db, deploy-infra-messaging]
+    # billing-service ja tem RDS proprio (rds.tf).
+    needs: [deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-billing-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
