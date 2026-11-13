@@ -8,7 +8,7 @@ Este documento descreve o contrato único dos workflows de `os-service`,
 
 | Job | Quando roda | O que faz |
 |---|---|---|
-| `test` | PR, push e `workflow_call` (exceto destroy) | `mvn -B test -Dspring.profiles.active=test` |
+| `test` | PR, push e `workflow_call` (exceto destroy e `skip_tests=true`) | `mvn -B test -Dspring.profiles.active=test` |
 | `validate` | PR, push e `workflow_call` | `terraform fmt -check -recursive` + `terraform init -backend=false` + `terraform validate` |
 | `build` | push em `master`, `workflow_dispatch` e `workflow_call` (sem destroy/dry-run) | autentica na AWS/ECR, garante o repositório ECR via Terraform direcionado e publica a imagem com a tag `image_tag` (default: `github.sha`) |
 | `tf-plan` | PR e `workflow_dispatch` com `dry_run=true` | `terraform plan -detailed-exitcode` (nunca aplica) |
@@ -39,6 +39,7 @@ workflow_call:
     destroy:     # default: false
     dry_run:     # default: false
     image_tag:   # default: github.sha (rollback por tag)
+    skip_tests:  # default: false — o mono passa true (já testou no `validate`)
   secrets:
     AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY

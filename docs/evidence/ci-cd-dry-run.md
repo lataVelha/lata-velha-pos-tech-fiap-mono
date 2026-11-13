@@ -9,7 +9,8 @@
 - `tf-plan` com `terraform plan -detailed-exitcode` em PR e em
   `workflow_dispatch` com `dry_run=true` (nunca aplica).
 - `$GITHUB_STEP_SUMMARY` em:
-  - `validate` (implícito no log do Actions);
+  - `validate` (o agregador publica a tabela de resultados das matrizes
+    `validate-terraform` / `validate-java` / `validate-lambda`);
   - `tf-deploy` (imagem + state key);
   - `verify` (`scripts/smoke-test.sh` publica namespace, deployment, URL e
     status);

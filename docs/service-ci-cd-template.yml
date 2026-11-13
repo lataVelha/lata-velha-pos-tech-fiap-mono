@@ -60,6 +60,11 @@ on:
         description: "Tag da imagem a reutilizar (rollback)"
         type: string
         required: false
+      skip_tests:
+        description: "Pula o job de testes (usado pelo mono, que ja testou no `validate` antes de chamar). Default false: chamada direta sempre testa"
+        type: boolean
+        required: false
+        default: false
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -89,7 +94,7 @@ env:
 jobs:
   test:
     name: "CI · Testes"
-    if: inputs.destroy != true
+    if: inputs.destroy != true && inputs.skip_tests != true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -129,8 +134,13 @@ jobs:
   build:
     name: "CD · Build & push → ECR"
     needs: [test, validate]
+    # `always()` + checagem explícita: com skip_tests=true (chamada do mono) o
+    # job `test` é skipped — sem isso o `needs` pularia o build.
     if: >
+      always() &&
       inputs.destroy != true && inputs.dry_run != true &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      needs.validate.result == 'success' &&
       (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && github.ref == 'refs/heads/master'))
     runs-on: ubuntu-24.04
@@ -201,7 +211,11 @@ jobs:
   tf-plan:
     name: "CI · Terraform plan (dry-run)"
     needs: [test, validate]
-    if: github.event_name == 'pull_request' || inputs.dry_run == true
+    if: >
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      needs.validate.result == 'success' &&
+      (github.event_name == 'pull_request' || inputs.dry_run == true)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

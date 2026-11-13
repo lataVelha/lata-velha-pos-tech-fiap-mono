@@ -43,11 +43,32 @@ dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada servi
 ## Ordem do pipeline
 
 ```
-infra (bootstrap) → infra (addons) → infra messaging → infra-db → lambda
-  VPC+EKS+ECR        ALB + API GW      SNS/SQS/DLQs       RDS      auth-cpf
-
-→ app (opcional) → edge (rotas) → os-service → inventory-service → billing-service
+infra (bootstrap) ──┬──‖ infra (addons)    ALB + API GW
+  VPC + EKS + ECR   ├──‖ infra messaging   SNS/SQS/DLQs
+                    └──‖ infra-db          RDS
+                             │
+              ┌──────────────┴───────────────┐
+              │                              │
+        lambda → edge                app ‖ os-service ‖ inventory-service ‖ billing-service
+      (authorizer + rotas)           (workloads, em paralelo)
 ```
+
+Três blocos rodam em paralelo, cada um com state Terraform próprio:
+
+1. `addons ‖ messaging ‖ infra-db` — dependem só do bootstrap (VPC/subnets/EKS).
+2. `app ‖ os-service ‖ inventory-service ‖ billing-service` — cada workload lê
+   apenas os states que precisa (`app` → `infra-db`; `os`/`inventory` →
+   `infra-db` + `messaging`; `billing` → `messaging`). Nenhum lê o state do
+   lambda nem do edge.
+3. `edge` fecha a borda depois do `lambda`, porque lê o state do lambda
+   (authorizer) + addons.
+
+> **Folga de nodes (margem, não causa):** quatro rollouts simultâneos com
+> `maxUnavailable: 0` pedem pods de surge que não caberiam no teto antigo de 4
+> nodes `t3.small`. O bootstrap passou a usar `node_max_size = 8`,
+> `node_min_size = 2` e `node_desired_size = 3`. A falha de 617s vista no
+> `os-service` **não** era capacidade: era colisão de Flyway/schema no RDS
+> compartilhado (o `app` usa `public`), resolvida com `db_schema` dedicado.
 
 O `app` é o baseline de transição e pode ser desligado sem editar o workflow
 (`vars.DEPLOY_APP=false` / `./apply.sh --skip-app`). O `edge` é o dono único
@@ -174,23 +195,25 @@ docker compose down -v    # remove também os volumes (bancos zerados no próxim
 O workflow deste repo (`.github/workflows/main.yml`) não reimplementa o deploy de cada
 submódulo — ele **chama o workflow reusável** de cada um (`uses:
 lataVelha/<repo>/.github/workflows/<arquivo>.yml@master`), na ordem do
-[pipeline](#ordem-do-pipeline), encadeados via `needs:`:
+[pipeline](#ordem-do-pipeline) (os stacks independentes em paralelo), encadeados via `needs:`:
 
 1. `deploy-infra-bootstrap` → `infra/.github/workflows/bootstrap.yml`
-2. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`
-3. `deploy-infra-messaging` → `infra/.github/workflows/messaging.yml`
-4. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`
-5. `deploy-lambda` → `lambda/.github/workflows/main.yml`
-6. `deploy-app` → `app/.github/workflows/main.yml` (**opcional**, `vars.DEPLOY_APP=false` desliga)
-7. `deploy-edge` → `infra/.github/workflows/edge.yml`
-8. `deploy-os-service` → `os-service/.github/workflows/main.yml`
-9. `deploy-inventory-service` → `inventory-service/.github/workflows/main.yml`
-10. `deploy-billing-service` → `billing-service/.github/workflows/main.yml`
+2. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`  ┐
+3. `deploy-infra-messaging` → `infra/.github/workflows/messaging.yml`  ├ paralelos
+4. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`  ┘
+5. `deploy-lambda` → `lambda/.github/workflows/main.yml` (espera 2 **e** 4)
+6. `deploy-app` → `app/.github/workflows/main.yml` (**opcional**, `vars.DEPLOY_APP=false` desliga)  ┐
+7. `deploy-os-service` → `os-service/.github/workflows/main.yml`  │ workloads
+8. `deploy-inventory-service` → `inventory-service/.github/workflows/main.yml`  ├ em paralelo
+9. `deploy-billing-service` → `billing-service/.github/workflows/main.yml`  ┘
+10. `deploy-edge` → `infra/.github/workflows/edge.yml` (depois do lambda)
 
-Um job `validate` roda em todo push e PR: checkout com os submódulos fixados no commit do mono
-repo, `terraform validate` de todos os stacks (incluindo `infra/terraform/messaging` e
-`infra/terraform/edge`) e testes (Maven do `app` e dos três serviços, pytest do `lambda`) — sem
-aplicar nada. Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
+A validação roda em todo push e PR, em três jobs de matriz independentes:
+`validate-terraform` (um job por stack, `terraform validate` sem state/AWS — inclui
+`infra/terraform/messaging` e `infra/terraform/edge`), `validate-java` (um job por serviço:
+`mvn test` do `app` e dos três serviços) e `validate-lambda` (pytest) — sem aplicar nada. O job
+agregador `validate` só consolida os resultados (e é ele que os `deploy-*`/`summary` referenciam
+em `needs`). Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
 disparo manual (`workflow_dispatch`) — os jobs `destroy-*` só rodam via `workflow_dispatch` com
 `destroy: true` (nunca automático). `dry_run=true` executa apenas a validação; nenhum deploy é
 disparado.

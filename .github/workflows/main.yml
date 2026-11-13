@@ -11,9 +11,23 @@ name: CI/CD Mono
 # 'lataVelha' organization" ou liberar este repo explicitamente).
 #
 # Ordem de deploy:
-#   infra bootstrap → infra addons → infra messaging → infra-db → lambda →
-#   app (opcional) → edge (rotas do API Gateway) →
-#   os-service → inventory-service → billing-service
+#   infra bootstrap → (infra addons ‖ infra messaging ‖ infra-db) →
+#     ├── lambda → edge (rotas do API Gateway)
+#     └── app (opcional) ‖ os-service ‖ inventory-service ‖ billing-service
+#
+# Paralelismo (tudo dentro do mesmo run, portanto concorrente):
+#   1. addons ‖ messaging ‖ infra-db — states S3 independentes, os três só
+#      precisam do bootstrap (VPC/subnets/EKS).
+#   2. lambda ‖ app ‖ os ‖ inventory ‖ billing — cada workload depende só dos
+#      states que lê (app→infra-db; os/inventory→infra-db+messaging;
+#      billing→messaging). Nenhum depende do lambda nem do edge.
+#   3. edge depois do lambda, porque lê o state do lambda (authorizer).
+#
+# PRÉ-REQUISITO do item 2: folga de nodes no cluster (node_max_size=8 no
+# bootstrap). Com o teto antigo (4 nodes t3.small) os 4 rollouts simultâneos
+# não caberiam e o provider kubectl estouraria por pod Pending. Observação:
+# a falha de 617s vista no os-service NÃO era capacidade — era Flyway/schema
+# no RDS compartilhado (por isso o db_schema dedicado no os-service).
 #
 # O app é opcional: vars.DEPLOY_APP=false desliga o deploy dele sem alterar
 # o workflow. O edge é o dono único da integração/rotas do API Gateway.
@@ -62,21 +76,100 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 # Um deploy do mono por vez; nunca cancela o que está em andamento.
+# Exceção: PR — ali não existe deploy (os jobs de CD são skipped), então
+# cancelar um run antigo do mesmo PR só economiza runner/tempo.
 concurrency:
   group: mono-deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ============================================================
-  # CI · VALIDAÇÃO
+  # CI · VALIDAÇÃO (matrizes independentes)
   # Checkout com submódulos no commit fixado pelo mono e validação de
   # TODOS os stacks: terraform validate (sem state/AWS) + testes Maven do
   # app e dos três serviços + pytest da lambda. Roda em todo push e PR.
+  #
+  # Antes era UM job com 9 validates + 4 Maven + pytest em série (~5min35s
+  # medidos). Agora cada stack é um job independente e o tempo total passa a
+  # ser o da tarefa mais lenta (~1min30s) em vez da soma.
+  #
+  # O job `validate` continua existindo como AGREGADOR: é ele que os jobs de
+  # deploy e o `summary` referenciam em `needs`, então o grafo de CD não muda
+  # — e um erro em qualquer matriz reprova o agregador, mantendo exatamente
+  # o mesmo comportamento de antes (deploy abortado se a CI falhar).
   # ============================================================
-  validate:
-    name: "CI · Validação dos submódulos"
+  validate-terraform:
+    name: "CI · Terraform validate (${{ matrix.name }})"
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # `fmt: true` só nos stacks que já rodavam fmt -check (comportamento
+        # preservado — não adicionamos fmt onde ele não rodava).
+        include:
+          - name: infra bootstrap + addons
+            dirs: "infra/terraform/bootstrap infra/terraform/addons"
+            fmt: false
+          - name: infra messaging
+            dirs: "infra/terraform/messaging"
+            fmt: true
+          - name: infra edge
+            dirs: "infra/terraform/edge"
+            fmt: true
+          - name: infra-db
+            dirs: "infra-db/terraform/deploy"
+            fmt: false
+          - name: lambda
+            dirs: "lambda/terraform/deploy"
+            fmt: false
+          - name: app
+            dirs: "app/terraform"
+            fmt: false
+          - name: os-service
+            dirs: "os-service/terraform"
+            fmt: true
+          - name: inventory-service
+            dirs: "inventory-service/terraform"
+            fmt: true
+          - name: billing-service
+            dirs: "billing-service/terraform"
+            fmt: true
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Terraform validate — ${{ matrix.name }}
+        env:
+          FMT: ${{ matrix.fmt }}
+        run: |
+          set -euo pipefail
+          for dir in ${{ matrix.dirs }}; do
+            echo "::group::$dir"
+            if [ "$FMT" = "true" ]; then
+              terraform -chdir="$dir" fmt -check -recursive
+            fi
+            terraform -chdir="$dir" init -backend=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+  validate-java:
+    name: "CI · Testes Maven (${{ matrix.service }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [app, os-service, inventory-service, billing-service]
 
     steps:
       - name: Checkout do código (com submódulos)
@@ -90,11 +183,24 @@ jobs:
           java-version: "21"
           distribution: corretto
           cache: maven
+          # Chave de cache por serviço: sem isso os 4 jobs disputam a mesma
+          # chave (`**/pom.xml`) e só o primeiro que termina salva o .m2.
+          cache-dependency-path: ${{ matrix.service }}/pom.xml
 
-      - name: Instalar Terraform 1.10
-        uses: hashicorp/setup-terraform@v3
+      - name: Testes automatizados — ${{ matrix.service }} (Maven)
+        working-directory: ${{ matrix.service }}
+        run: mvn -B test -Dspring.profiles.active=test
+
+  validate-lambda:
+    name: "CI · Testes lambda (pytest)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
         with:
-          terraform_version: "1.10.x"
+          submodules: recursive
 
       - name: Configurar Python 3.12
         uses: actions/setup-python@v5
@@ -103,79 +209,40 @@ jobs:
           cache: pip
           cache-dependency-path: lambda/requirements/dev.txt
 
-      - name: Terraform validate — infra (bootstrap + addons)
-        run: |
-          terraform -chdir=infra/terraform/bootstrap init -backend=false
-          terraform -chdir=infra/terraform/bootstrap validate
-          terraform -chdir=infra/terraform/addons init -backend=false
-          terraform -chdir=infra/terraform/addons validate
-
-      - name: Terraform validate — infra messaging
-        run: |
-          terraform -chdir=infra/terraform/messaging fmt -check -recursive
-          terraform -chdir=infra/terraform/messaging init -backend=false
-          terraform -chdir=infra/terraform/messaging validate
-
-      - name: Terraform validate — infra edge
-        run: |
-          terraform -chdir=infra/terraform/edge fmt -check -recursive
-          terraform -chdir=infra/terraform/edge init -backend=false
-          terraform -chdir=infra/terraform/edge validate
-
-      - name: Terraform validate — infra-db
-        run: |
-          terraform -chdir=infra-db/terraform/deploy init -backend=false
-          terraform -chdir=infra-db/terraform/deploy validate
-
-      - name: Terraform validate — lambda
-        run: |
-          terraform -chdir=lambda/terraform/deploy init -backend=false
-          terraform -chdir=lambda/terraform/deploy validate
-
-      - name: Terraform validate — app (deploy)
-        run: |
-          terraform -chdir=app/terraform init -backend=false
-          terraform -chdir=app/terraform validate
-
-      - name: Terraform validate — os-service
-        run: |
-          terraform -chdir=os-service/terraform fmt -check -recursive
-          terraform -chdir=os-service/terraform init -backend=false
-          terraform -chdir=os-service/terraform validate
-
-      - name: Terraform validate — inventory-service
-        run: |
-          terraform -chdir=inventory-service/terraform fmt -check -recursive
-          terraform -chdir=inventory-service/terraform init -backend=false
-          terraform -chdir=inventory-service/terraform validate
-
-      - name: Terraform validate — billing-service
-        run: |
-          terraform -chdir=billing-service/terraform fmt -check -recursive
-          terraform -chdir=billing-service/terraform init -backend=false
-          terraform -chdir=billing-service/terraform validate
-
-      - name: Testes automatizados — app (Maven)
-        working-directory: app
-        run: mvn -B test -Dspring.profiles.active=test
-
-      - name: Testes automatizados — os-service (Maven)
-        working-directory: os-service
-        run: mvn -B test -Dspring.profiles.active=test
-
-      - name: Testes automatizados — inventory-service (Maven)
-        working-directory: inventory-service
-        run: mvn -B test -Dspring.profiles.active=test
-
-      - name: Testes automatizados — billing-service (Maven)
-        working-directory: billing-service
-        run: mvn -B test -Dspring.profiles.active=test
-
       - name: Testes automatizados — lambda (pytest)
         working-directory: lambda
         run: |
           pip install -r requirements/dev.txt
           pytest -q
+
+  validate:
+    name: "CI · Validação dos submódulos"
+    needs: [validate-terraform, validate-java, validate-lambda]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Consolidar resultado das matrizes
+        run: |
+          TF="${{ needs.validate-terraform.result }}"
+          MAVEN="${{ needs.validate-java.result }}"
+          PYTEST="${{ needs.validate-lambda.result }}"
+
+          {
+            echo "### CI · Validação"
+            echo ""
+            echo "| matriz | resultado |"
+            echo "|---|---|"
+            echo "| terraform validate | \`$TF\` |"
+            echo "| testes Maven | \`$MAVEN\` |"
+            echo "| pytest lambda | \`$PYTEST\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$TF" != "success" ] || [ "$MAVEN" != "success" ] || [ "$PYTEST" != "success" ]; then
+            echo "::error::Validação falhou (terraform=$TF maven=$MAVEN pytest=$PYTEST) — veja os jobs de matriz acima."
+            exit 1
+          fi
 
   # ============================================================
   # CD · DEPLOY — ordem de dependência completa.
@@ -210,7 +277,11 @@ jobs:
 
   deploy-infra-messaging:
     name: "CD · infra (messaging SNS/SQS)"
-    needs: deploy-infra-addons
+    # Depende só do bootstrap: o módulo messaging tem state próprio, não lê
+    # o state dos addons e (com o default enable_irsa=false) nem toca no EKS.
+    # Por isso roda em paralelo com addons/infra-db — antes estava serial e
+    # atrasava o pipeline em ~2min25s.
+    needs: deploy-infra-bootstrap
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -222,7 +293,11 @@ jobs:
 
   deploy-infra-db:
     name: "CD · infra-db"
-    needs: deploy-infra-messaging
+    # Depende só do bootstrap (VPC/subnets). Roda em PARALELO com addons e
+    # messaging: state próprio (lata-velha/infra-db) e nenhum recurso
+    # compartilhado com eles. O RDS é o passo mais lento (~7min) e agora
+    # acontece junto com o ALB/API Gateway em vez de depois.
+    needs: deploy-infra-bootstrap
     uses: lataVelha/lata-velha-pos-tech-fiap-infra-db/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -235,7 +310,10 @@ jobs:
 
   deploy-lambda:
     name: "CD · lambda"
-    needs: deploy-infra-db
+    # Precisa dos DOIS states: infra-db (endpoint/credenciais do RDS) e addons
+    # (API Gateway onde o POST /auth/cpf é anexado). Como addons e infra-db
+    # agora rodam em paralelo, a espera é explícita aqui.
+    needs: [deploy-infra-addons, deploy-infra-db]
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -244,9 +322,25 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
+  # ============================================================
+  # CD · WORKLOADS — app, os, inventory e billing rodam EM PARALELO.
+  # Cada um depende só dos states que realmente lê:
+  #   app         → infra-db              (terraform_remote_state.infra_db)
+  #   os/inventory→ infra-db + messaging
+  #   billing     → messaging
+  # Nenhum lê o state do lambda nem do edge (o `app` não tem mais recursos de
+  # API Gateway — a rota antiga saiu junto com o stack edge). O edge continua
+  # sendo o último, depois do lambda (authorizer).
+  #
+  # Folga de nodes: com o teto antigo (4 nodes t3.small) os 4 rollouts
+  # simultâneos (até 12 pods x 512Mi com maxSurge, maxUnavailable=0) não
+  # caberiam — o bootstrap agora usa node_max_size=8 / min=2 / desired=3.
+  # Isso é MARGEM, não a causa do timeout de 617s observado: aquele era
+  # Flyway/schema no RDS compartilhado (ver db_schema no os-service).
+  # ============================================================
   deploy-app:
     name: "CD · app (baseline de transição, opcional)"
-    needs: deploy-lambda
+    needs: deploy-infra-db
     if: vars.DEPLOY_APP != 'false' && github.event.inputs.dry_run != 'true'
     uses: lataVelha/lata-velha-pos-tech-fiap/.github/workflows/main.yml@master
     with:
@@ -261,7 +355,7 @@ jobs:
 
   deploy-os-service:
     name: "CD · os-service"
-    needs: [deploy-lambda, deploy-infra-messaging, deploy-edge]
+    needs: [deploy-infra-db, deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -277,7 +371,7 @@ jobs:
 
   deploy-inventory-service:
     name: "CD · inventory-service"
-    needs: [deploy-os-service, deploy-infra-messaging]
+    needs: [deploy-infra-db, deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-inventory-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -293,7 +387,7 @@ jobs:
 
   deploy-billing-service:
     name: "CD · billing-service"
-    needs: [deploy-inventory-service, deploy-infra-messaging]
+    needs: [deploy-infra-db, deploy-infra-messaging]
     uses: lataVelha/lata-velha-pos-tech-fiap-billing-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -309,18 +403,18 @@ jobs:
 
   # ============================================================
   # CD · EDGE — dono único da integração/rotas do API Gateway.
-  # Roda depois do lambda (authorizer) e do app (que, com o código novo,
-  # remove as rotas antigas do próprio state). Se o app estiver desligado
-  # (DEPLOY_APP=false), o edge roda mesmo assim.
+  # Depende SÓ do lambda (authorizer) + addons, e o edge.yml lê exatamente
+  # esses dois states (addons + lambda). Antes ele também esperava o `app`,
+  # mas o app/terraform não tem recurso de API Gateway — era acoplamento
+  # obsoleto que só atrasava o run.
   # ============================================================
   deploy-edge:
     name: "CD · edge (rotas do API Gateway)"
-    needs: [deploy-lambda, deploy-app]
+    needs: deploy-lambda
     if: >
       always() &&
       github.event.inputs.dry_run != 'true' &&
-      needs.deploy-lambda.result == 'success' &&
-      (needs.deploy-app.result == 'success' || needs.deploy-app.result == 'skipped')
+      needs.deploy-lambda.result == 'success'
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
