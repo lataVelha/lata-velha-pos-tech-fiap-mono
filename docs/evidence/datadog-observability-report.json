@@ -1,0 +1,292 @@
+{
+  "timestamp": "2026-11-14T19:47:53Z",
+  "env": "prod",
+  "window": "2:00:00",
+  "services": [
+    "lata-velha-billing-service",
+    "lata-velha-inventory-service",
+    "lata-velha-os-service"
+  ],
+  "checks": [
+    {
+      "id": "DT-DD-01/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.io.opentelemetry.spring_webmvc_6.0.server.hits{service:lata-velha-billing-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-billing-service",
+            "point": 19.5
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-01/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.org.springframework.boot.server.hits{service:lata-velha-inventory-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-inventory-service",
+            "point": 18.0
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-01/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.org.springframework.boot.server.hits{service:lata-velha-os-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-os-service",
+            "point": 18.5
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-02/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.io.opentelemetry.spring_webmvc_6.0.server.errors{service:lata-velha-billing-service,env:prod} by {service}",
+        "series": [],
+        "message": "sem erros na janela"
+      }
+    },
+    {
+      "id": "DT-DD-02/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.org.springframework.boot.server.errors{service:lata-velha-inventory-service,env:prod} by {service}",
+        "series": [],
+        "message": "sem erros na janela"
+      }
+    },
+    {
+      "id": "DT-DD-02/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.org.springframework.boot.server.errors{service:lata-velha-os-service,env:prod} by {service}",
+        "series": [],
+        "message": "sem erros na janela"
+      }
+    },
+    {
+      "id": "DT-DD-03/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "p95:trace.io.opentelemetry.spring_webmvc_6.0.server{service:lata-velha-billing-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-billing-service",
+            "point": 0.006091216780239945
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-03/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "p95:trace.org.springframework.boot.server{service:lata-velha-inventory-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-inventory-service",
+            "point": 0.0030318089887342173
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-03/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "p95:trace.org.springframework.boot.server{service:lata-velha-os-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-os-service",
+            "point": 0.0032257846194221817
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-04/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "avg:jvm.heap_memory{service:lata-velha-billing-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-billing-service",
+            "point": 21023786.666666668
+          }
+        ],
+        "message": "série encontrada",
+        "heap_max": [
+          {
+            "scope": "env:prod,service:lata-velha-billing-service",
+            "point": 86507520.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "DT-DD-04/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "avg:jvm.heap_memory{service:lata-velha-inventory-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-inventory-service",
+            "point": 17282729.333333332
+          }
+        ],
+        "message": "série encontrada",
+        "heap_max": [
+          {
+            "scope": "env:prod,service:lata-velha-inventory-service",
+            "point": 86507520.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "DT-DD-04/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "avg:jvm.heap_memory{service:lata-velha-os-service,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-os-service",
+            "point": 28963102.0
+          }
+        ],
+        "message": "série encontrada",
+        "heap_max": [
+          {
+            "scope": "env:prod,service:lata-velha-os-service",
+            "point": 86507520.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "DT-DD-05/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-billing-service",
+        "events": 1
+      }
+    },
+    {
+      "id": "DT-DD-05/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-inventory-service",
+        "events": 1
+      }
+    },
+    {
+      "id": "DT-DD-05/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-os-service",
+        "events": 1
+      }
+    },
+    {
+      "id": "DT-DD-06/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-billing-service",
+        "spans": 1
+      }
+    },
+    {
+      "id": "DT-DD-06/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-inventory-service",
+        "spans": 1
+      }
+    },
+    {
+      "id": "DT-DD-06/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-os-service",
+        "spans": 1
+      }
+    },
+    {
+      "id": "DT-DD-07",
+      "status": "pass",
+      "details": {
+        "title": "Lata Velha — Microsserviços",
+        "dashboards_seen": 3,
+        "id": "ybt-6vw-p2t",
+        "url": "/dashboard/ybt-6vw-p2t/lata-velha--microsservios",
+        "widgets": 11
+      }
+    },
+    {
+      "id": "DT-DD-08",
+      "status": "pass",
+      "details": {
+        "count": 12,
+        "missing": [],
+        "alerting": [],
+        "states": {
+          "[prod] lata-velha-billing-service — p95 acima do baseline": "OK",
+          "[prod] lata-velha-inventory-service — mais de 3 restarts em 15 min": "OK",
+          "[prod] lata-velha-billing-service — mais de 3 restarts em 15 min": "OK",
+          "[prod] lata-velha-os-service — p95 acima do baseline": "OK",
+          "[prod] lata-velha-os-service — mais de 3 restarts em 15 min": "OK",
+          "[prod] lata-velha-inventory-service — p95 acima do baseline": "OK",
+          "[prod] lata-velha-billing-service — erros 5xx > 1%": "OK",
+          "[prod] lata-velha-inventory-service — erros 5xx > 1%": "OK",
+          "[prod] lata-velha-os-service — erros 5xx > 1%": "OK",
+          "[prod] lata-velha-os-service — heap JVM > 85%": "OK",
+          "[prod] lata-velha-billing-service — heap JVM > 85%": "OK",
+          "[prod] lata-velha-inventory-service — heap JVM > 85%": "OK"
+        }
+      }
+    },
+    {
+      "id": "DT-DD-09",
+      "status": "skip",
+      "details": {
+        "reason": "integração AWS desabilitada no AWS Academy; fallback = alarmes CloudWatch do messaging"
+      }
+    },
+    {
+      "id": "DT-DD-10",
+      "status": "pass",
+      "details": {
+        "url": "https://we5lklh1vk.execute-api.us-east-1.amazonaws.com/actuator/health",
+        "http_status": 200,
+        "body": {
+          "status": "UP",
+          "groups": [
+            "liveness",
+            "readiness"
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "passed": 21,
+    "failed": 0,
+    "skipped": 1
+  }
+}

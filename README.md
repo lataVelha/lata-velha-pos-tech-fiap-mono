@@ -41,11 +41,14 @@ dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada servi
 ## Ordem do pipeline
 
 ```
-infra (bootstrap) ──┬──‖ infra (addons)    ALB + API GW
+infra (bootstrap) ──┬──‖ infra (addons) → observability   ALB + API GW + Datadog
   VPC + EKS         └──‖ infra messaging   SNS/SQS/DLQs
                              │
                              ▼
               os-service ‖ inventory-service ‖ billing-service
+                             │
+                             ▼
+                verify-observability (Datadog + health)
                              │
                              ▼
                 lambda → edge (authorizer + rotas)
@@ -53,11 +56,15 @@ infra (bootstrap) ──┬──‖ infra (addons)    ALB + API GW
 
 Blocos com state Terraform próprio:
 
-1. `addons ‖ messaging` — dependem só do bootstrap (VPC/subnets/EKS).
+1. `addons → observability ‖ messaging` — dependem só do bootstrap
+   (VPC/subnets/EKS). O `addons` sobe o Agent/OTLP; o `observability` aplica
+   dashboard e monitores Datadog.
 2. `os-service ‖ inventory-service ‖ billing-service` — cada workload lê só o
    state de messaging; `os-service` e `billing-service` provisionam o próprio
    RDS e o `inventory-service` sobe MongoDB no cluster.
-3. `lambda` depende do `os-service` (a `auth-cpf` lê o RDS dele) e do `addons`
+3. `verify-observability` roda depois dos três workloads e valida com dados
+   reais (logs, spans, trace metrics, JVM, dashboard, monitores e health).
+4. `lambda` depende do `os-service` (a `auth-cpf` lê o RDS dele) e do `addons`
    (API Gateway). O `edge` fecha a borda depois do `lambda`, porque lê o
    `jwt_authorizer_id` + o state do addons.
 

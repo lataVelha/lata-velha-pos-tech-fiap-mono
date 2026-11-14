@@ -44,13 +44,12 @@ done
 
 ## Resultado
 
-- [ ] Staging validado — data: ____
-- [ ] Produção validada — data: ____
-- [ ] Trace IDs de exemplo anexados ao PR:
-  - app: ____
-  - os: ____
-  - inventory: ____
-  - billing: ____
+- [x] Produção validada — 2026-11-14 (relatório `datadog-observability-report.json`).
+- [x] Sem referência ao serviço removido `lata-velha-api` na stack gerenciada.
+- [x] Evidência detalhada (hits, p95, JVM, logs, spans, dashboard e monitores):
+  [`datadog-observability.md`](./datadog-observability.md).
+- [ ] Trace IDs de exemplo anexados ao PR — coletar no próximo fluxo autenticado
+  (health checks não geram log de negócio).
 
 > Dependência: traces distribuídos através de SNS/SQS (Story 18.3) precisam
 > do barramento aplicado e da feature flag `OTEL_INSTRUMENTATION_AWS_SDK_ENABLED`

@@ -11,9 +11,10 @@ name: CI/CD Mono
 # 'lataVelha' organization" ou liberar este repo explicitamente).
 #
 # Ordem de deploy:
-#   infra bootstrap → (infra addons ‖ infra messaging) →
+#   infra bootstrap → (infra addons → observability ‖ infra messaging) →
 #     os-service ‖ inventory-service ‖ billing-service →
-#     lambda (lê o RDS do os-service) → edge (rotas do API Gateway)
+#     verify-observability → lambda (lê o RDS do os-service) →
+#     edge (rotas do API Gateway)
 #
 # Paralelismo:
 #   1. addons ‖ messaging — states S3 independentes, os dois só
@@ -118,6 +119,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Guard — serviço fantasma no observability
+        if: matrix.name == 'infra observability (Datadog)'
+        run: |
+          if grep -R "lata-velha-api" infra/terraform/observability; then
+            echo "::error::serviço fantasma lata-velha-api em infra/terraform/observability"
+            exit 1
+          fi
+
       - name: Instalar Terraform 1.10
         uses: hashicorp/setup-terraform@v3
         with:
@@ -189,9 +198,28 @@ jobs:
           pip install -r requirements/dev.txt
           pytest -q
 
+  validate-observability-scripts:
+    name: "CI · Verificação Datadog (testes)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compilar e testar verify_datadog.py
+        run: |
+          python3 -m py_compile scripts/verify_datadog.py
+          python3 -m unittest discover -s scripts/tests -v
+
   validate:
     name: "CI · Validação dos submódulos"
-    needs: [validate-terraform, validate-java, validate-lambda]
+    needs: [validate-terraform, validate-java, validate-lambda, validate-observability-scripts]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -202,6 +230,7 @@ jobs:
           TF="${{ needs.validate-terraform.result }}"
           MAVEN="${{ needs.validate-java.result }}"
           PYTEST="${{ needs.validate-lambda.result }}"
+          OBS="${{ needs.validate-observability-scripts.result }}"
 
           {
             echo "### CI · Validação"
@@ -211,10 +240,11 @@ jobs:
             echo "| terraform validate | \`$TF\` |"
             echo "| testes Maven | \`$MAVEN\` |"
             echo "| pytest lambda | \`$PYTEST\` |"
+            echo "| verify_datadog (unit) | \`$OBS\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$TF" != "success" ] || [ "$MAVEN" != "success" ] || [ "$PYTEST" != "success" ]; then
-            echo "::error::Validação falhou (terraform=$TF maven=$MAVEN pytest=$PYTEST) — veja os jobs de matriz acima."
+          if [ "$TF" != "success" ] || [ "$MAVEN" != "success" ] || [ "$PYTEST" != "success" ] || [ "$OBS" != "success" ]; then
+            echo "::error::Validação falhou (terraform=$TF maven=$MAVEN pytest=$PYTEST observability=$OBS) — veja os jobs de matriz acima."
             exit 1
           fi
 
@@ -249,6 +279,26 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
+
+  deploy-observability:
+    name: "CD · observability (Datadog)"
+    needs: [deploy-infra-addons]
+    if: >
+      github.event.inputs.dry_run != 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/observability.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: false
+      aws_integration_enabled: false
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
+      TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
+      TF_VAR_alert_recipients: ${{ secrets.TF_VAR_ALERT_RECIPIENTS }}
 
   deploy-infra-messaging:
     name: "CD · infra (messaging SNS/SQS)"
@@ -330,6 +380,75 @@ jobs:
       TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
       TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
       TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
+
+  # ============================================================
+  # CD · VERIFY — gate de observabilidade com dados reais.
+  # ============================================================
+  verify-observability:
+    name: "CD · verificação Datadog (dados reais)"
+    needs:
+      - deploy-observability
+      - deploy-os-service
+      - deploy-inventory-service
+      - deploy-billing-service
+    if: >
+      always() &&
+      github.event_name != 'pull_request' &&
+      github.event.inputs.dry_run != 'true' &&
+      github.event.inputs.destroy != 'true' &&
+      needs.deploy-observability.result == 'success' &&
+      needs.deploy-os-service.result == 'success' &&
+      needs.deploy-inventory-service.result == 'success' &&
+      needs.deploy-billing-service.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Descobrir URL pública do health
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="lata-velha-tfstate-${ACCOUNT_ID}"
+          aws s3 cp "s3://${STATE_BUCKET}/lata-velha/infra-addons/terraform.tfstate" /tmp/addons.tfstate > /dev/null
+          APP_URL=$(jq -r '.outputs.app_api_endpoint.value' /tmp/addons.tfstate)
+          echo "APP_API_URL=${APP_URL}" >> "$GITHUB_ENV"
+
+      - name: Verificar Datadog e health
+        env:
+          DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
+        run: |
+          python3 scripts/verify_datadog.py \
+            --env prod \
+            --window 2h \
+            --api-url "$APP_API_URL" \
+            --wait 120 \
+            --report datadog-report.json
+
+      - name: Publicar relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: datadog-report
+          path: datadog-report.json
+          if-no-files-found: warn
 
   # ============================================================
   # CD · EDGE — dono único da integração/rotas do API Gateway.
@@ -441,9 +560,26 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
+  destroy-observability:
+    name: "CD · Destruir · observability (Datadog)"
+    needs: [destroy-infra-messaging]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/observability.yml@master
+    with:
+      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      destroy: true
+      aws_integration_enabled: false
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
+      TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
+      TF_VAR_alert_recipients: ${{ secrets.TF_VAR_ALERT_RECIPIENTS }}
+
   destroy-infra-addons:
     name: "CD · Destruir · infra (addons)"
-    needs: destroy-infra-messaging
+    needs: destroy-observability
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -472,13 +608,16 @@ jobs:
     name: "CD · Sumário do run"
     needs:
       - validate
+      - deploy-observability
       - deploy-os-service
       - deploy-inventory-service
       - deploy-billing-service
+      - verify-observability
       - deploy-lambda
       - deploy-edge
       - destroy-edge
       - destroy-lambda
+      - destroy-observability
       - destroy-infra-bootstrap
     if: always()
     runs-on: ubuntu-24.04
@@ -502,12 +641,15 @@ jobs:
             echo "| job | resultado |"
             echo "|---|---|"
             echo "| validate | \`${{ needs.validate.result }}\` |"
+            echo "| deploy-observability | \`${{ needs.deploy-observability.result }}\` |"
             echo "| deploy-os-service | \`${{ needs.deploy-os-service.result }}\` |"
             echo "| deploy-inventory-service | \`${{ needs.deploy-inventory-service.result }}\` |"
             echo "| deploy-billing-service | \`${{ needs.deploy-billing-service.result }}\` |"
+            echo "| verify-observability | \`${{ needs.verify-observability.result }}\` |"
             echo "| deploy-lambda | \`${{ needs.deploy-lambda.result }}\` |"
             echo "| deploy-edge | \`${{ needs.deploy-edge.result }}\` |"
             echo "| destroy-edge | \`${{ needs.destroy-edge.result }}\` |"
             echo "| destroy-lambda | \`${{ needs.destroy-lambda.result }}\` |"
+            echo "| destroy-observability | \`${{ needs.destroy-observability.result }}\` |"
             echo "| destroy-infra-bootstrap | \`${{ needs.destroy-infra-bootstrap.result }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
