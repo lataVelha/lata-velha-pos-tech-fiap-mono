@@ -291,18 +291,73 @@ jobs:
       github.event.inputs.dry_run != 'true' &&
       ((github.event_name == 'workflow_dispatch' && github.event.inputs.destroy != 'true') ||
        (github.event_name == 'push' && github.ref == 'refs/heads/master'))
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/observability.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      destroy: false
-      aws_integration_enabled: false
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
-      TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
-      TF_VAR_alert_recipients: ${{ secrets.TF_VAR_ALERT_RECIPIENTS }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # O job é inline (em vez de chamar o workflow reutilizável do infra) para
+    # não depender de o observability.yml já existir em infra@master antes do
+    # merge. O workflow reutilizável continua disponível para dispatch manual.
+    concurrency:
+      group: infra-observability
+      cancel-in-progress: false
+    env:
+      REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Resolver bucket de estado (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> "$GITHUB_ENV"
+
+      - name: Exportar variáveis opcionais
+        env:
+          ALERT_RECIPIENTS: ${{ secrets.TF_VAR_ALERT_RECIPIENTS }}
+        run: |
+          if [[ -n "${ALERT_RECIPIENTS}" ]]; then
+            echo "TF_VAR_alert_recipients=${ALERT_RECIPIENTS}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform Init — observability
+        run: |
+          terraform -chdir=infra/terraform/observability init -reconfigure \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${REGION}"
+
+      - name: Terraform fmt/validate — observability
+        run: |
+          terraform -chdir=infra/terraform/observability fmt -check -recursive
+          terraform -chdir=infra/terraform/observability validate
+
+      - name: Terraform Apply — observability
+        env:
+          TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
+          TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
+          TF_VAR_aws_integration_enabled: "false"
+        run: |
+          terraform -chdir=infra/terraform/observability apply -auto-approve
+
+      - name: Publicar recursos aplicados
+        run: |
+          echo "Dashboard: $(terraform -chdir=infra/terraform/observability output -raw dashboard_url)"
+          echo "Monitores:"
+          terraform -chdir=infra/terraform/observability output -json monitor_ids
 
   deploy-infra-messaging:
     name: "CD · infra (messaging SNS/SQS)"
@@ -568,18 +623,56 @@ jobs:
     name: "CD · Destruir · observability (Datadog)"
     needs: [destroy-infra-messaging]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/observability.yml@master
-    with:
-      aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      destroy: true
-      aws_integration_enabled: false
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
-      TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
-      TF_VAR_alert_recipients: ${{ secrets.TF_VAR_ALERT_RECIPIENTS }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: infra-observability
+      cancel-in-progress: false
+    env:
+      REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    steps:
+      - name: Checkout do código (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Resolver bucket de estado (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> "$GITHUB_ENV"
+
+      - name: Terraform Init — observability
+        run: |
+          terraform -chdir=infra/terraform/observability init -reconfigure \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${REGION}"
+
+      - name: Terraform fmt/validate — observability
+        run: |
+          terraform -chdir=infra/terraform/observability fmt -check -recursive
+          terraform -chdir=infra/terraform/observability validate
+
+      - name: Terraform Destroy — observability
+        env:
+          TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
+          TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
+          TF_VAR_aws_integration_enabled: "false"
+        run: |
+          terraform -chdir=infra/terraform/observability destroy -auto-approve
 
   destroy-infra-addons:
     name: "CD · Destruir · infra (addons)"

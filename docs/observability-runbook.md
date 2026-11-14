@@ -125,6 +125,10 @@ e imprime `dashboard_url` + `monitor_ids`. O state é
   secrets `TF_VAR_dd_api_key`/`TF_VAR_dd_app_key`).
 - Mono: `deploy-observability` (após addons), `destroy-observability` (antes
   do destroy dos addons) e `verify-observability` (após os três workloads).
+  Esses jobs usam os passos Terraform inline (mesmo `init`/`fmt`/`validate`/
+  apply do workflow reutilizável) para não depender de o arquivo já existir em
+  `infra@master` antes do merge; o workflow reutilizável fica disponível para
+  dispatch manual e outros callers.
 - `verify-observability` roda `scripts/verify_datadog.py` e publica o artifact
   `datadog-report`.
 - Em PR os jobs de CD são skipped; só a validação (`fmt`/`validate` + testes
