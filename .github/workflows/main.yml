@@ -58,6 +58,12 @@ on:
 
 permissions:
   contents: read
+  # Os workflows reutilizáveis de inventory/billing declaram
+  # `pull-requests: write` no job de testes (comentário do Sonar em PR).
+  # O caller precisa conceder esse escopo, senão o run morre no startup com
+  # "nested job is requesting 'pull-requests: write', but is only allowed
+  # 'pull-requests: none'".
+  pull-requests: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
