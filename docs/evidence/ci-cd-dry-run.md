@@ -18,7 +18,7 @@
   - `summary` do mono (commit, evento, ref, flags e resultados de todos os
     jobs, inclusive `deploy-lambda` e `deploy-edge`).
 - `docs/RUNBOOK-rollback.md` documenta o re-deploy por `image_tag`.
-- `docs/RUNBOOK-cutover-app.md` documenta o cutover do app/rotas/ALB.
+- O cutover do monolito foi concluído e o runbook removido junto com o repo `app`.
 
 ## Como validar sem aplicar
 

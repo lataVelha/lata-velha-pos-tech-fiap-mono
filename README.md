@@ -26,7 +26,7 @@ para os detalhes da arquitetura.
 
 | Repo | O que provisiona/faz |
 | --- | --- |
-| [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno (target groups/listener rules por path), API Gateway (único ponto de entrada), Cluster Autoscaler e o stack `edge` (integração + rotas) |
+| [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ALB interno (target groups/listener rules por path), API Gateway (único ponto de entrada), Cluster Autoscaler e o stack `edge` (integração + rotas) |
 | [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | `auth-cpf` (`POST /auth/cpf`, lendo o RDS do os-service) + `jwt-authorizer`, anexadas ao API Gateway do `infra` |
 | [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | Domínio de Ordem de Serviço + `authentication`, com ECR/state/namespace/RDS próprios (`lata-velha-os`, NodePort 30082) e pipeline autônomo |
 | [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | Domínio de Peça/Estoque/PecaAlocada, com ECR/state/namespace próprios (`lata-velha-inventory`, NodePort 30083) e pipeline autônomo |
@@ -42,12 +42,13 @@ dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada servi
 
 ```
 infra (bootstrap) ──┬──‖ infra (addons)    ALB + API GW
-  VPC + EKS + ECR   └──‖ infra messaging   SNS/SQS/DLQs
+  VPC + EKS         └──‖ infra messaging   SNS/SQS/DLQs
                              │
-              ┌──────────────┴───────────────┐
-              │                              │
-        lambda → edge                os-service ‖ inventory-service ‖ billing-service
-      (authorizer + rotas)           (workloads, em paralelo)
+                             ▼
+              os-service ‖ inventory-service ‖ billing-service
+                             │
+                             ▼
+                lambda → edge (authorizer + rotas)
 ```
 
 Blocos com state Terraform próprio:

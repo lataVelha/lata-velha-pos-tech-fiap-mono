@@ -17,11 +17,11 @@ Story 12.1. Nenhum valor sensível é versionado: tudo vem de
 | `TF_MAIL_USERNAME` | ✅ | ❌ | ❌ | — | — |
 | `TF_MAIL_PASSWORD` | ✅ | ❌ | ❌ | — | — |
 | `TF_VAR_DD_API_KEY` (mono/infra) | ✅ | ❌ | ❌ | ❌ | ✅ |
-| `TF_DD_API_KEY` (nome passado aos serviços) | — | — | — | — | — | — |
-| `TF_MERCADOPAGO_ACCESS_TOKEN` | ❌ | — | — | — | ❌ | — |
-| `TF_MERCADOPAGO_WEBHOOK_SECRET` | ❌ | — | — | — | ❌ | — |
-| `TF_DB_USERNAME` / `TF_DB_PASSWORD` | ✅ | — | — | — | — | — |
-| `DD_API_KEY` / `DD_APP_KEY` (observability local) | — | — | — | — | — | usado só no apply local |
+| `TF_DD_API_KEY` (nome passado aos serviços) | — | — | — | — | — |
+| `TF_MERCADOPAGO_ACCESS_TOKEN` | ❌ | — | — | ❌ | — |
+| `TF_MERCADOPAGO_WEBHOOK_SECRET` | ❌ | — | — | ❌ | — |
+| `TF_DB_USERNAME` / `TF_DB_PASSWORD` | ✅ | — | — | — | — |
+| `DD_API_KEY` / `DD_APP_KEY` (observability local) | — | — | — | — | usado só no apply local |
 
 **Nomes diferentes:** o mono guarda `TF_VAR_DD_API_KEY` e o workflow repassa
 esse valor como `TF_DD_API_KEY` para os/inventory/billing e como
