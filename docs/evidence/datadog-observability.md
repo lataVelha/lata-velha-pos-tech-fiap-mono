@@ -3,6 +3,15 @@
 Validação real executada em **2026-11-14** contra `env:prod`, site `us5`.
 Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-report.json).
 
+## PRs e runs
+
+| Item | Referência |
+|---|---|
+| Infra PR (stack + workflow) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/pull/13 |
+| Mono PR (pipeline + docs + evidência) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/pull/7 |
+| Mono CI (PR, validação) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43635091779 |
+| Infra CI (PR, observability + plan) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/actions/runs/43635079467 |
+
 ## Recursos aplicados
 
 | Recurso | ID | URL/observação |
@@ -15,6 +24,8 @@ Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-
 | SQS | — | N/A no AWS Academy; fallback CloudWatch (ver runbook §7) |
 
 `terraform plan` após o apply: **No changes** (idempotente).
+As 12 queries de monitor foram revalidadas na API `/api/v1/monitor/validate`:
+**12/12 HTTP 200**.
 
 ## Queries e resultados (janela 2h)
 
