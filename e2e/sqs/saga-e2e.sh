@@ -108,7 +108,7 @@ api POST "/iniciar-diagnostico/$OS_ID" >/dev/null
 ok "diagnóstico iniciado"
 
 step "Adicionando serviço e finalizando diagnóstico"
-api POST "/adicionar-servico/$OS_ID" '{"servicoId":1,"pecas":[{"pecaId":1,"quantidade":1}]}' >/dev/null || true
+api POST "/adicionar-servico/$OS_ID" '{"servicoId":1,"pecas":[{"pecaId":"1","quantidade":1}]}' >/dev/null || true
 api POST "/finalizar-diagnostico/$OS_ID" >/dev/null
 wait_until "billing consumiu DiagnosticoFinalizado" bash -c "[[ \$(aws sqs get-queue-attributes --queue-url '$(queue_url billing)' --attribute-names ApproximateNumberOfMessages --query 'Attributes.ApproximateNumberOfMessages' --output text) == 0 ]]"
 

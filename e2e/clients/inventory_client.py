@@ -15,12 +15,12 @@ class InventoryServiceClient:
         resp.raise_for_status()
         return resp.json()
 
-    def get_peca_estoque(self, peca_id: int) -> dict:
+    def get_peca_estoque(self, peca_id: str) -> dict:
         resp = self._session.get(f"{self.base_url}/pecas/{peca_id}/estoque")
         resp.raise_for_status()
         return resp.json()
 
-    def entrada_estoque(self, peca_id: int, quantidade: int) -> dict:
+    def entrada_estoque(self, peca_id: str, quantidade: int) -> dict:
         resp = self._session.post(
             f"{self.base_url}/pecas/{peca_id}/estoque/entrada",
             json={"quantidade": quantidade},
@@ -28,7 +28,7 @@ class InventoryServiceClient:
         resp.raise_for_status()
         return resp.json()
 
-    def saida_estoque(self, peca_id: int, quantidade: int) -> dict:
+    def saida_estoque(self, peca_id: str, quantidade: int) -> dict:
         resp = self._session.post(
             f"{self.base_url}/pecas/{peca_id}/estoque/saida",
             json={"quantidade": quantidade},
@@ -36,7 +36,7 @@ class InventoryServiceClient:
         resp.raise_for_status()
         return resp.json()
 
-    def ajustar_estoque(self, peca_id: int, quantidade_armazenada: int, quantidade_disponivel: int) -> dict:
+    def ajustar_estoque(self, peca_id: str, quantidade_armazenada: int, quantidade_disponivel: int) -> dict:
         resp = self._session.patch(
             f"{self.base_url}/pecas/{peca_id}/estoque/ajuste",
             json={
