@@ -268,7 +268,11 @@ jobs:
 
   deploy-infra-addons:
     name: "CD · infra (addons)"
-    needs: deploy-infra-bootstrap
+    # Depende do billing para garantir que o billing destrua o target group
+    # proprio (gateway.tf removido) antes de addons criar o lata-velha-billing-tg
+    # no ALB compartilhado. Sem essa ordem, o apply do addons falharia com
+    # "ELBv2 Target Group already exists" na migracao.
+    needs: [deploy-infra-bootstrap, deploy-billing-service]
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
