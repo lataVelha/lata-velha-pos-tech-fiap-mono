@@ -312,6 +312,8 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
       TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
       TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   # ============================================================
@@ -364,6 +366,8 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       TF_MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.TF_MERCADOPAGO_ACCESS_TOKEN }}
       TF_MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.TF_MERCADOPAGO_WEBHOOK_SECRET }}
+      TF_MAIL_USERNAME: ${{ secrets.TF_MAIL_USERNAME }}
+      TF_MAIL_PASSWORD: ${{ secrets.TF_MAIL_PASSWORD }}
       TF_DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   destroy-inventory-service:
