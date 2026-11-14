@@ -34,21 +34,6 @@ class OsServiceClient:
         resp = self._session.patch(f"{self.base_url}/ordens-servico/{os_id}/finalizar-diagnostico")
         resp.raise_for_status()
 
-    def aprovar(self, os_id: int, decisoes: list[dict]) -> dict:
-        resp = self.aprovar_raw(os_id, decisoes)
-        resp.raise_for_status()
-        return resp.json()
-
-    def aprovar_raw(self, os_id: int, decisoes: list[dict]) -> requests.Response:
-        return self._session.patch(
-            f"{self.base_url}/ordens-servico/{os_id}/aprovar",
-            json={"servicos": decisoes},
-        )
-
-    def reprovar(self, os_id: int) -> None:
-        resp = self._session.patch(f"{self.base_url}/ordens-servico/{os_id}/reprovar")
-        resp.raise_for_status()
-
     def iniciar_servico(self, os_id: int, execucao_servico_id: int, raise_on_error: bool = True):
         resp = self._session.patch(
             f"{self.base_url}/ordens-servico/{os_id}/iniciar-servico/{execucao_servico_id}"
@@ -63,9 +48,11 @@ class OsServiceClient:
         )
         resp.raise_for_status()
 
-    def retirar_veiculo(self, os_id: int) -> None:
+    def retirar_veiculo(self, os_id: int, raise_on_error: bool = True):
         resp = self._session.patch(f"{self.base_url}/ordens-servico/{os_id}/retirar-veiculo")
-        resp.raise_for_status()
+        if raise_on_error:
+            resp.raise_for_status()
+        return resp
 
     def get_ordem_servico(self, os_id: int) -> dict:
         resp = self._session.get(f"{self.base_url}/ordens-servico", params={"id": os_id})
@@ -76,12 +63,15 @@ class OsServiceClient:
         return content[0]
 
     def aprovacao_orcamento(self, os_id: int, decisoes: list[dict]) -> dict:
-        resp = requests.post(
+        resp = self.aprovacao_orcamento_raw(os_id, decisoes)
+        resp.raise_for_status()
+        return resp.json()
+
+    def aprovacao_orcamento_raw(self, os_id: int, decisoes: list[dict]) -> requests.Response:
+        return requests.post(
             f"{self.base_url}/ordens-servico/{os_id}/aprovacao-orcamento",
             json={"servicos": decisoes},
         )
-        resp.raise_for_status()
-        return resp.json()
 
     def list_proprietarios(self) -> list[dict]:
         resp = self._session.get(f"{self.base_url}/proprietarios", params={"page": 0, "size": 1})
