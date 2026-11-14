@@ -44,8 +44,8 @@ workflow_call:
     AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN        # opcional (Academy)
-    TF_MAIL_USERNAME         # os/inventory/app
-    TF_MAIL_PASSWORD         # os/inventory/app
+    TF_MAIL_USERNAME         # os/inventory
+    TF_MAIL_PASSWORD         # os/inventory
     TF_DD_API_KEY            # opcional
     TF_MERCADOPAGO_ACCESS_TOKEN      # billing
     TF_MERCADOPAGO_WEBHOOK_SECRET    # billing (opcional)
@@ -53,7 +53,7 @@ workflow_call:
 
 ## Convenções obrigatórias
 
-1. **Checkout sempre do próprio repositório** — nunca do `app`.
+1. **Checkout sempre do próprio repositório** — nunca de outro serviço.
 2. **Concorrência por serviço** (`deploy-os`, `deploy-inventory`, `deploy-billing`) com
    `cancel-in-progress: false`: deploys não se atropelam, mas serviços diferentes não se bloqueiam.
 3. **Timeout** por job (20 min serviço; 45 min mono).
@@ -62,7 +62,7 @@ workflow_call:
    `terraform output -raw ecr_repository_url` e publica apenas lá.
 5. **Destroy isolado**: `terraform destroy` no stack do serviço, com variáveis dummy
    (`TF_VAR_docker_image`, `TF_VAR_mail_*`, `TF_VAR_mercadopago_access_token`) para satisfazer
-   validações; nunca toca no state do `app`.
+   validações; nunca toca no state de outro serviço.
 6. **Evidências**: `$GITHUB_STEP_SUMMARY` deve conter commit, imagem, state key, namespace,
    resultado do rollout e status do health.
 7. **Sem segredos hardcoded**: apenas `secrets.*`/`vars.*`.
@@ -70,5 +70,6 @@ workflow_call:
 ## Destruição
 
 - `workflow_dispatch` com `destroy=true` destrói apenas o stack do serviço.
-- O mono chama os workflows em ordem inversa (`billing → inventory → os`).
-- O `app` nunca é destruído por um workflow de serviço.
+- O mono chama os workflows em ordem inversa (`edge → billing → inventory →
+  lambda → os → messaging → addons → bootstrap`).
+- Nenhum workflow de serviço destrói o stack de outro serviço.

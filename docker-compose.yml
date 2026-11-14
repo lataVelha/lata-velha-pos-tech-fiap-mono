@@ -45,11 +45,8 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/lata_velha_inventory
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: admin123
-      SPRING_JPA_HIBERNATE_DDL_AUTO: none
-      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_DATA_MONGODB_URI: mongodb://admin:admin123@mongodb:27017/lata_velha_inventory?authSource=admin
+      MONGOCK_ENABLED: "true"
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
       SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
@@ -62,7 +59,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: guest
       OTEL_EXPORTER_OTLP_ENABLED: "false"
     depends_on:
-      postgres-inventory:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -141,20 +138,20 @@ services:
     networks:
       - lata_velha_dev
 
-  postgres-inventory:
-    image: postgres:15
-    container_name: postgres-lata-velha-inventory
+  mongodb:
+    image: mongo:7
+    container_name: mongo-lata-velha-inventory
     restart: unless-stopped
     environment:
-      POSTGRES_DB: lata_velha_inventory
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: lata_velha_inventory
     ports:
-      - "5434:5432"
+      - "27017:27017"
     volumes:
-      - postgres_inventory_data:/var/lib/postgresql/data
+      - mongo_inventory_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d lata_velha_inventory"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -205,7 +202,7 @@ services:
 
 volumes:
   postgres_os_data:
-  postgres_inventory_data:
+  mongo_inventory_data:
   postgres_billing_data:
   rabbitmq_data:
 

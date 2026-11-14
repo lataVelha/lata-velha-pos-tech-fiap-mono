@@ -1,7 +1,8 @@
 # Runbook — observabilidade (Datadog + OpenTelemetry)
 
-Story 18.4. Serviços cobertos: `lata-velha-api`, `lata-velha-os-service`,
-`lata-velha-inventory-service`, `lata-velha-billing-service`.
+Story 18.4. Serviços cobertos: `lata-velha-os-service`,
+`lata-velha-inventory-service`, `lata-velha-billing-service` (o monolito
+`lata-velha-api` foi removido).
 
 ## 1. Encontrar o serviço no APM
 
@@ -33,7 +34,7 @@ kubectl logs -n datadog ds/datadog-agent --tail=100 | grep -i otlp
 | `401 Unauthorized` no Agent | `DD_API_KEY` inválida/ausente | atualizar Secret e reiniciar pods |
 | nenhuma env OTel no pod | ConfigMap/Secret não montados | `kubectl describe pod` (envFrom) |
 | spans duplicados | Admission Controller ativo | `datadog.apm.instrumentation.enabled=false` e label no pod |
-| `service.name` errado | ConfigMap com nome antigo (`lata-velha-api`) | corrigir `OTEL_SERVICE_NAME` e reiniciar |
+| `service.name` errado | ConfigMap com nome antigo (ex.: `lata-velha-os`) | corrigir `OTEL_SERVICE_NAME` e reiniciar |
 
 ## 4. Validar OTLP no nó
 
@@ -79,7 +80,6 @@ kubectl logs -n <namespace> deploy/<service> --previous
 
 | Serviço | Traces | Logs c/ trace_id | Métricas | Dashboards |
 |---|---|---|---|---|
-| lata-velha-api | ✅ | ✅ | ✅ | ✅ |
 | lata-velha-os-service | ✅ | ✅ | ✅ | ✅ |
 | lata-velha-inventory-service | ✅ | ✅ | ✅ | ✅ |
 | lata-velha-billing-service | ✅ | ✅ | ✅ | ✅ |

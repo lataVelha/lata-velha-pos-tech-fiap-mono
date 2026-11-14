@@ -1,5 +1,10 @@
 # Evidências — app opcional + cutover de rotas/ALB
 
+> **Documento histórico.** O cutover foi concluído e os repos `app` e
+> `infra-db` foram removidos. O `RUNBOOK-cutover-app.md` não existe mais; o
+> ALB opera em catch-all 404 (`app_enabled=false`, default). Mantido apenas
+> como registro do que foi feito.
+
 ## O que foi implementado
 
 ### App opcional
@@ -35,8 +40,8 @@
 
 - `app/.github/workflows/main.yml`: smoke test do app via port-forward no
   Service (não depende mais do API Gateway durante o cutover).
-- `docs/RUNBOOK-cutover-app.md`: passo a passo + rollback.
-- READMEs atualizados (pipeline, `DEPLOY_APP`, `APP_ENABLED`, edge).
+- Runbook de cutover (removido junto com o repo `app`).
+- READMEs atualizados (pipeline, `APP_ENABLED`, edge).
 
 ## Validações executadas
 
@@ -54,8 +59,10 @@ Não executado (exige AWS/cluster): `terraform plan/apply`, deploy real,
 
 ## Pendências operacionais
 
-1. Commitar/pushar `app`, `infra`, `os-service`, `inventory-service`.
-2. Bump dos ponteiros dos submódulos no mono.
-3. Rodar o roteiro de [`docs/RUNBOOK-cutover-app.md`](../RUNBOOK-cutover-app.md).
-4. Definir `DEPLOY_APP=false`/`APP_ENABLED=false` no mono (e `APP_ENABLED=false`
-   no repo `infra`, se o pipeline dele rodar em `master`).
+1. ~~Commitar/pushar `app`, `infra`, `os-service`, `inventory-service`.~~ —
+   `app`/`infra-db` removidos; `infra`, `os-service` e `inventory-service`
+   corrigidos.
+2. ~~Bump dos ponteiros dos submódulos no mono.~~ — feito.
+3. ~~Rodar o roteiro do `RUNBOOK-cutover-app.md`.~~ — cutover concluído.
+4. ~~Definir `DEPLOY_APP=false`/`APP_ENABLED=false`.~~ — `app_enabled` agora
+   tem default `false` no `infra` e o mono passa `app_enabled: false`.

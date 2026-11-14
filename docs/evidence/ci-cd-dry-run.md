@@ -3,8 +3,7 @@
 ## O que foi implementado
 
 - Input `dry_run` no mono: com `true`, **nenhum** job de deploy é disparado
-  (bootstrap/addons/messaging/infra-db/lambda/app/edge/serviços); roda só o
-  `validate`.
+  (bootstrap/addons/messaging/serviços/lambda/edge); roda só o `validate`.
 - Inputs `dry_run` e `image_tag` nos workflows dos três serviços.
 - `tf-plan` com `terraform plan -detailed-exitcode` em PR e em
   `workflow_dispatch` com `dry_run=true` (nunca aplica).
@@ -17,7 +16,7 @@
   - `destroy` (serviço destruído);
   - `edge` (API Gateway, rotas aplicadas);
   - `summary` do mono (commit, evento, ref, flags e resultados de todos os
-    jobs, inclusive `deploy-app: skipped` e `deploy-edge`).
+    jobs, inclusive `deploy-lambda` e `deploy-edge`).
 - `docs/RUNBOOK-rollback.md` documenta o re-deploy por `image_tag`.
 - `docs/RUNBOOK-cutover-app.md` documenta o cutover do app/rotas/ALB.
 
@@ -48,7 +47,7 @@ gh workflow run main.yml -f dry_run=true
 | campo | valor |
 |---|---|
 | operação | `destroy` |
-| ordem | `billing → inventory → os → app → lambda → infra-db → infra-messaging → addons → bootstrap` |
+| ordem | `edge → billing → inventory → lambda → os → infra-messaging → addons → bootstrap` |
 | recursos removidos | listados no log do `terraform destroy` |
 
 ## Auditoria

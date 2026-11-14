@@ -12,15 +12,16 @@ name: CI/CD Mono
 #
 # Ordem de deploy:
 #   infra bootstrap → (infra addons ‖ infra messaging) →
-#     ├── lambda → edge (rotas do API Gateway)
-#     └── os-service ‖ inventory-service ‖ billing-service
+#     os-service ‖ inventory-service ‖ billing-service →
+#     lambda (lê o RDS do os-service) → edge (rotas do API Gateway)
 #
 # Paralelismo:
 #   1. addons ‖ messaging — states S3 independentes, os dois só
 #      precisam do bootstrap (VPC/subnets/EKS).
-#   2. lambda ‖ os ‖ inventory ‖ billing — cada workload depende só dos
-#      states que lê (os/inventory/billing→messaging). Nenhum depende do edge.
-#   3. edge depois do lambda, porque lê o state do lambda (authorizer).
+#   2. os ‖ inventory ‖ billing — cada workload depende só do state do
+#      messaging. Nenhum depende do edge.
+#   3. lambda depois do os-service (lê o RDS dele) e do addons (API Gateway).
+#   4. edge depois do lambda, porque lê o state do lambda (authorizer).
 #
 # Ordem de destroy (workflow_dispatch com destroy=true): a inversa,
 # começando pelo edge.
@@ -100,6 +101,9 @@ jobs:
             fmt: true
           - name: billing-service
             dirs: "billing-service/terraform"
+            fmt: true
+          - name: infra observability (Datadog)
+            dirs: "infra/terraform/observability"
             fmt: true
 
     steps:
@@ -232,6 +236,8 @@ jobs:
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      # O monolito foi removido: paths nao roteados viram 404 (catch-all).
+      app_enabled: false
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -252,7 +258,9 @@ jobs:
 
   deploy-lambda:
     name: "CD · lambda"
-    needs: deploy-infra-addons
+    # A lambda auth-cpf le o RDS do os-service; por isso depende do deploy
+    # do os-service (e do addons, onde registra a authorizer).
+    needs: [deploy-infra-addons, deploy-os-service]
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -265,6 +273,7 @@ jobs:
   # CD · WORKLOADS — os, inventory e billing rodam EM PARALELO.
   # Cada um depende só dos states que realmente lê:
   #   os/inventory/billing → messaging
+  # A lambda (job acima) depende do os-service: a auth-cpf le o RDS dele.
   # ============================================================
   deploy-os-service:
     name: "CD · os-service"
@@ -383,7 +392,8 @@ jobs:
 
   destroy-os-service:
     name: "CD · Destruir · os-service"
-    needs: destroy-inventory-service
+    # A lambda le o state do os-service; ela precisa ser destruida antes.
+    needs: destroy-lambda
     uses: lataVelha/lata-velha-pos-tech-fiap-os-service/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -398,7 +408,7 @@ jobs:
 
   destroy-lambda:
     name: "CD · Destruir · lambda"
-    needs: destroy-os-service
+    needs: destroy-inventory-service
     uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -410,7 +420,8 @@ jobs:
 
   destroy-infra-messaging:
     name: "CD · Destruir · infra (messaging)"
-    needs: destroy-lambda
+    # O os-service le o state do messaging; ele precisa ser destruido antes.
+    needs: destroy-os-service
     uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/messaging.yml@master
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -454,8 +465,10 @@ jobs:
       - deploy-os-service
       - deploy-inventory-service
       - deploy-billing-service
+      - deploy-lambda
       - deploy-edge
       - destroy-edge
+      - destroy-lambda
       - destroy-infra-bootstrap
     if: always()
     runs-on: ubuntu-24.04
@@ -482,7 +495,9 @@ jobs:
             echo "| deploy-os-service | \`${{ needs.deploy-os-service.result }}\` |"
             echo "| deploy-inventory-service | \`${{ needs.deploy-inventory-service.result }}\` |"
             echo "| deploy-billing-service | \`${{ needs.deploy-billing-service.result }}\` |"
+            echo "| deploy-lambda | \`${{ needs.deploy-lambda.result }}\` |"
             echo "| deploy-edge | \`${{ needs.deploy-edge.result }}\` |"
             echo "| destroy-edge | \`${{ needs.destroy-edge.result }}\` |"
+            echo "| destroy-lambda | \`${{ needs.destroy-lambda.result }}\` |"
             echo "| destroy-infra-bootstrap | \`${{ needs.destroy-infra-bootstrap.result }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"

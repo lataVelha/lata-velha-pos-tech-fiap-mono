@@ -27,9 +27,7 @@ para os detalhes da arquitetura.
 | Repo | O que provisiona/faz |
 | --- | --- |
 | [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) | VPC, EKS, ECR, ALB interno (target groups/listener rules por path), API Gateway (único ponto de entrada), Cluster Autoscaler e o stack `edge` (integração + rotas) |
-| [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) | RDS PostgreSQL compartilhado do legado (`app`/lambda) — os microsserviços Postgres têm RDS próprio |
-| [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | Login por CPF (`auth-cpf`) e a lambda authorizer, anexadas ao API Gateway do `infra` |
-| [`app`](https://github.com/lataVelha/lata-velha-pos-tech-fiap) | Monolito original (DDD) + deploy dele no cluster. **Opcional**: `DEPLOY_APP=false` desliga o deploy durante o cutover |
+| [`lambda`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-lambda) | `auth-cpf` (`POST /auth/cpf`, lendo o RDS do os-service) + `jwt-authorizer`, anexadas ao API Gateway do `infra` |
 | [`os-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service) | Domínio de Ordem de Serviço + `authentication`, com ECR/state/namespace/RDS próprios (`lata-velha-os`, NodePort 30082) e pipeline autônomo |
 | [`inventory-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service) | Domínio de Peça/Estoque/PecaAlocada, com ECR/state/namespace próprios (`lata-velha-inventory`, NodePort 30083) e pipeline autônomo |
 | [`billing-service`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service) | Cobrança integrada ao Mercado Pago, com pipeline autônomo (`lata-velha-billing`, NodePort 30081) |
@@ -44,55 +42,51 @@ dentro de cada um — não é uma lib publicada ainda, o `pom.xml` de cada servi
 
 ```
 infra (bootstrap) ──┬──‖ infra (addons)    ALB + API GW
-  VPC + EKS + ECR   ├──‖ infra messaging   SNS/SQS/DLQs
-                    └──‖ infra-db          RDS
+  VPC + EKS + ECR   └──‖ infra messaging   SNS/SQS/DLQs
                              │
               ┌──────────────┴───────────────┐
               │                              │
-        lambda → edge                app ‖ os-service ‖ inventory-service ‖ billing-service
+        lambda → edge                os-service ‖ inventory-service ‖ billing-service
       (authorizer + rotas)           (workloads, em paralelo)
 ```
 
-Três blocos rodam em paralelo, cada um com state Terraform próprio:
+Blocos com state Terraform próprio:
 
-1. `addons ‖ messaging ‖ infra-db` — dependem só do bootstrap (VPC/subnets/EKS).
-2. `app ‖ os-service ‖ inventory-service ‖ billing-service` — cada workload lê
-   apenas os states que precisa (`app` → `infra-db`; `os` → `messaging`;
-   `inventory` → `infra-db` + `messaging`; `billing` → `messaging`).
-   `os-service` e `billing-service` provisionam o próprio RDS; nenhum lê o
-   state do lambda nem do edge.
-3. `edge` fecha a borda depois do `lambda`, porque lê o state do lambda
-   (authorizer) + addons.
+1. `addons ‖ messaging` — dependem só do bootstrap (VPC/subnets/EKS).
+2. `os-service ‖ inventory-service ‖ billing-service` — cada workload lê só o
+   state de messaging; `os-service` e `billing-service` provisionam o próprio
+   RDS e o `inventory-service` sobe MongoDB no cluster.
+3. `lambda` depende do `os-service` (a `auth-cpf` lê o RDS dele) e do `addons`
+   (API Gateway). O `edge` fecha a borda depois do `lambda`, porque lê o
+   `jwt_authorizer_id` + o state do addons.
 
 > **Folga de nodes (margem, não causa):** quatro rollouts simultâneos com
 > `maxUnavailable: 0` pedem pods de surge que não caberiam no teto antigo de 4
 > nodes `t3.small`. O bootstrap passou a usar `node_max_size = 8`,
 > `node_min_size = 2` e `node_desired_size = 3`. A falha de 617s vista no
 > `os-service` **não** era capacidade: era colisão de Flyway/schema no RDS
-> compartilhado (o `app` usa `public`). O os-service agora tem **RDS próprio**
-> (`terraform/rds.tf`, database `lata_velha_os`), então o problema não volta
-> mesmo com o app no ar.
+> compartilhado do legado. O os-service agora tem **RDS próprio**
+> (`terraform/rds.tf`, database `lata_velha_os`), então o problema não volta.
 
-O `app` é o baseline de transição e pode ser desligado sem editar o workflow
-(`vars.DEPLOY_APP=false` / `./apply.sh --skip-app`). O `edge` é o dono único
-da integração e das rotas do API Gateway; o ALB roteia por path para os
-serviços. O `billing-service` mantém NLB/API Gateway próprios para o webhook
-do Mercado Pago. O cutover completo está em
-[`docs/RUNBOOK-cutover-app.md`](docs/RUNBOOK-cutover-app.md).
+O `edge` é o dono único da integração e das rotas do API Gateway; o ALB
+roteia por path para os serviços e responde **404** (catch-all) para paths
+não roteados — o monolito e o `infra-db` foram removidos. O
+`billing-service` mantém NLB/API Gateway próprios para o webhook do Mercado
+Pago.
 
 Cada serviço tem **repositório, ECR, state Terraform, namespace e NodePort
 únicos**:
 
 | Serviço | State | Namespace / Deployment | NodePort | ECR |
 |---|---|---|---|---|
-| app | `lata-velha/deploy/terraform.tfstate` | `lata-velha` / `lata-velha-api` | 30080 | `lata-velha` |
 | os-service | `lata-velha/os-service/terraform.tfstate` | `lata-velha-os` / `lata-velha-os` | 30082 | `lata-velha-os-service` |
 | inventory-service | `lata-velha/inventory-service/terraform.tfstate` | `lata-velha-inventory` / `lata-velha-inventory` | 30083 | `lata-velha-inventory-service` |
 | billing-service | `lata-velha/billing-service/terraform.tfstate` | `lata-velha-billing` / `lata-velha-billing` | 30081 | `lata-velha-billing` |
 
 Os serviços Postgres (`os-service` e `billing-service`) têm **RDS próprio** (database-per-service).
-O `inventory-service` usa MongoDB/Mongock e ainda não tem um banco provisionado na AWS
-(DocumentDB/Mongo é um gap conhecido); o `infra-db` permanece apenas para o legado `app`/lambda.
+O `inventory-service` usa MongoDB, provisionado no próprio cluster
+(`k8s/mongodb-deployment.yaml` + `k8s/mongodb-service.yaml`). A lambda `auth-cpf` consulta o
+RDS do `os-service`; não existe mais `infra-db` nem deploy do `app` monolito.
 
 O stack `edge` tem state próprio (`lata-velha/edge/terraform.tfstate`) e não é um serviço: ele
 gerencia a integração/rotas do API Gateway e é aplicado depois do `lambda`.
@@ -140,29 +134,23 @@ combinados. Cada repo tem seu `terraform.tfvars.example` — copie e edite antes
 ```bash
 ./apply.sh                    # pipeline completo, com confirmação interativa em cada etapa
 ./apply.sh --auto             # pipeline completo, sem confirmação
-./apply.sh --skip-tests       # pula os testes Maven (app/os/inventory/billing)
-./apply.sh --skip-app         # pula o deploy do app (cutover)
+./apply.sh --skip-tests       # pula os testes Maven (os/inventory/billing)
 ./apply.sh --destroy          # desfaz tudo na ordem inversa, com confirmação
 ./apply.sh --destroy --auto   # desfaz tudo, sem confirmação
 ```
 
-Variáveis de cutover:
-
-```bash
-DEPLOY_APP=false ./apply.sh                          # app nao e deployado (edge + servicos continuam)
-DEPLOY_APP=false APP_ENABLED=false ./apply.sh        # cutover: app fora e 404 para paths nao roteados
-APP_ENABLED=false ./apply.sh --skip-app              # equivalente ao anterior
-```
+O ALB opera em modo catch-all 404 (`app_enabled=false`, default): paths que
+não casam com nenhuma listener rule viram 404. A var `APP_ENABLED=true`
+existe apenas como escape hatch de rollback manual do monolito.
 
 Rollback de um serviço sem rebuild: ver [`docs/RUNBOOK-rollback.md`](docs/RUNBOOK-rollback.md).
 
 ## Ambiente de desenvolvimento local (serviços separados)
 
-O `app` é opcional no pipeline (baseline de transição). Este
-`docker-compose.yml` na raiz sobe **os serviços já separados** — `os-service`,
-`inventory-service` e `billing-service` — junto com os bancos de cada um e um broker de
-eventos (RabbitMQ), pra testar a topologia pós-separação localmente. Não inclui o `app`
-nem a infra AWS.
+Este `docker-compose.yml` na raiz sobe **os serviços já separados** —
+`os-service`, `inventory-service` e `billing-service` — junto com os bancos de
+cada um (Postgres para os/billing, MongoDB para inventory) e um broker de
+eventos (RabbitMQ), pra testar a topologia localmente. Não inclui a infra AWS.
 
 **Pré-requisito:** Docker + submódulos inicializados recursivamente (precisa do
 `shared-kernel` dentro de `os-service/` e `inventory-service/`):
@@ -206,19 +194,17 @@ lataVelha/<repo>/.github/workflows/<arquivo>.yml@master`), na ordem do
 
 1. `deploy-infra-bootstrap` → `infra/.github/workflows/bootstrap.yml`
 2. `deploy-infra-addons` → `infra/.github/workflows/addons.yml`  ┐
-3. `deploy-infra-messaging` → `infra/.github/workflows/messaging.yml`  ├ paralelos
-4. `deploy-infra-db` → `infra-db/.github/workflows/main.yml`  ┘
-5. `deploy-lambda` → `lambda/.github/workflows/main.yml` (espera 2 **e** 4)
-6. `deploy-app` → `app/.github/workflows/main.yml` (**opcional**, `vars.DEPLOY_APP=false` desliga)  ┐
-7. `deploy-os-service` → `os-service/.github/workflows/main.yml`  │ workloads
-8. `deploy-inventory-service` → `inventory-service/.github/workflows/main.yml`  ├ em paralelo
-9. `deploy-billing-service` → `billing-service/.github/workflows/main.yml`  ┘
-10. `deploy-edge` → `infra/.github/workflows/edge.yml` (depois do lambda)
+3. `deploy-infra-messaging` → `infra/.github/workflows/messaging.yml`  ┘ paralelos
+4. `deploy-os-service` → `os-service/.github/workflows/main.yml`  ┐
+5. `deploy-inventory-service` → `inventory-service/.github/workflows/main.yml`  ├ workloads
+6. `deploy-billing-service` → `billing-service/.github/workflows/main.yml`  ┘ em paralelo
+7. `deploy-lambda` → `lambda/.github/workflows/main.yml` (espera 2 **e** 4)
+8. `deploy-edge` → `infra/.github/workflows/edge.yml` (depois do lambda)
 
 A validação roda em todo push e PR, em três jobs de matriz independentes:
 `validate-terraform` (um job por stack, `terraform validate` sem state/AWS — inclui
 `infra/terraform/messaging` e `infra/terraform/edge`), `validate-java` (um job por serviço:
-`mvn test` do `app` e dos três serviços) e `validate-lambda` (pytest) — sem aplicar nada. O job
+`mvn test` do os-service, inventory-service e billing-service) e `validate-lambda` (pytest) — sem aplicar nada. O job
 agregador `validate` só consolida os resultados (e é ele que os `deploy-*`/`summary` referenciam
 em `needs`). Os jobs `deploy-*` rodam em push pra `master` (aqui e em cada submódulo) **ou** via
 disparo manual (`workflow_dispatch`) — os jobs `destroy-*` só rodam via `workflow_dispatch` com
@@ -227,7 +213,7 @@ disparado.
 
 Template e contrato dos workflows: [`docs/service-ci-cd-template.md`](docs/service-ci-cd-template.md).
 
-**Pré-requisito:** cada um dos 7 repos submódulo precisa permitir ser chamado de fora, em
+**Pré-requisito:** cada um dos 5 repos submódulo precisa permitir ser chamado de fora, em
 **Settings → Actions → General → Access** (liberar para a organização/conta `lataVelha` ou para
 este repo especificamente) — como `lataVelha` é uma conta pessoal (não organização), essa
 liberação nem sempre é suficiente sozinha; os repos submódulo estão públicos, o que também
@@ -237,5 +223,5 @@ not found" ao tentar carregar o workflow do outro repo.
 **Destroy:** cada submódulo também aceita um input `destroy` no próprio `workflow_call` (mesmo
 padrão do `--destroy` que os `apply.sh` locais já tinham) — o job `workflow_dispatch` com
 `destroy: true` chama os workflows reusáveis na ordem inversa:
-`edge → billing → inventory → os → app → lambda → infra-db → infra messaging → infra (addons) →
-infra (bootstrap)`.
+`edge → billing → inventory → lambda → os → infra messaging → infra (addons) →
+infra (bootstrap)`. A lambda é destruída antes do os-service porque lê o state dele.

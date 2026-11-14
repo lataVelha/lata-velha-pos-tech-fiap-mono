@@ -1,7 +1,7 @@
 # RUNBOOK — rollback de deploy
 
-Story 12.3. Aplicável a `app`, `os-service`, `inventory-service` e
-`billing-service`.
+Story 12.3. Aplicável a `os-service`, `inventory-service` e
+`billing-service` (o monolito `app` foi removido).
 
 ## Quando fazer rollback
 
@@ -80,15 +80,13 @@ O pipeline roda normalmente e publica uma nova imagem. É a opção mais lenta.
 
 | Serviço | Owner |
 |---|---|
-| app | time de plataforma |
 | os-service | time de OS |
 | inventory-service | time de estoque |
 | billing-service | time de billing |
 
 ## Observações
 
-- Nunca rode `terraform destroy` no stack do `app` para "resolver" rollback.
 - O rollback de um serviço não afeta os demais (state/namespace/ECR isolados).
 - Em caso de DLQ crescendo, siga também `infra/terraform/messaging/RUNBOOK-sqs.md`.
-- Rollback do cutover do `app`/rotas/ALB: ver
-  [`docs/RUNBOOK-cutover-app.md`](RUNBOOK-cutover-app.md).
+- O ALB opera em catch-all 404 (`app_enabled=false`); não há mais rollback de
+  cutover do monolito.
