@@ -7,6 +7,7 @@
 [submodule "billing-service"]
 	path = billing-service
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service.git
+	branch = master
 [submodule "inventory-service"]
 	path = inventory-service
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-inventory-service.git
