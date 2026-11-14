@@ -9,8 +9,8 @@ Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-
 |---|---|
 | Infra PR (stack + workflow) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/pull/13 |
 | Mono PR (pipeline + docs + evidência) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/pull/7 |
-| Mono CI (PR, validação) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43635091779 |
-| Infra CI (PR, observability + plan) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/actions/runs/43635079467 |
+| Mono CI (PR, validação) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43637822728 |
+| Infra CI (PR, observability + plan) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/actions/runs/43637793669 |
 
 ## Recursos aplicados
 

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-14T19:47:53Z",
+  "timestamp": "2026-11-14T20:33:25Z",
   "env": "prod",
   "window": "2:00:00",
   "services": [
@@ -16,7 +16,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 19.5
+            "point": 16.0
           }
         ],
         "message": "série encontrada"
@@ -30,7 +30,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 18.0
+            "point": 17.5
           }
         ],
         "message": "série encontrada"
@@ -44,7 +44,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 18.5
+            "point": 19.0
           }
         ],
         "message": "série encontrada"
@@ -85,7 +85,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 0.006091216780239945
+            "point": 0.0029851657735229216
           }
         ],
         "message": "série encontrada"
@@ -99,7 +99,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 0.0030318089887342173
+            "point": 0.0033793682140686667
           }
         ],
         "message": "série encontrada"
@@ -113,7 +113,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 0.0032257846194221817
+            "point": 0.0032761875041006534
           }
         ],
         "message": "série encontrada"
@@ -127,7 +127,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 21023786.666666668
+            "point": 20707420.0
           }
         ],
         "message": "série encontrada",
@@ -147,7 +147,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 17282729.333333332
+            "point": 19488572.0
           }
         ],
         "message": "série encontrada",
@@ -167,7 +167,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 28963102.0
+            "point": 28448756.0
           }
         ],
         "message": "série encontrada",
