@@ -82,6 +82,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-billing:5432/lata_velha_billing
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: admin123
+      MERCADOPAGO_BASE_URL: ${MERCADOPAGO_BASE_URL:-http://fake-mercadopago:8090}
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
       MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
       MERCADOPAGO_NOTIFICATION_URL: ${MERCADOPAGO_NOTIFICATION_URL:-}
@@ -106,6 +107,8 @@ services:
         condition: service_healthy
       inventory-service:
         condition: service_healthy
+      fake-mercadopago:
+        condition: service_started
     ports:
       - "8081:8081"
     healthcheck:
@@ -114,6 +117,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    networks:
+      - lata_velha_dev
+
+  fake-mercadopago:
+    container_name: fake-mercadopago
+    image: python:3.12-alpine
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "-u", "/app/app.py"]
+    volumes:
+      - ./e2e/fakes/mercadopago:/app:ro
+    ports:
+      - "8090:8090"
     networks:
       - lata_velha_dev
 

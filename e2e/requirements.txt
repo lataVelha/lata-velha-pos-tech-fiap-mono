@@ -1,3 +1,5 @@
 requests
 pika
 pytest
+psycopg2-binary
+pymongo
