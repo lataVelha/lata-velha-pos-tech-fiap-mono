@@ -372,6 +372,18 @@ def _find_values(value: Any, keys: set[str]):
             yield from _find_values(item, keys)
 
 
+def _all_keys(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            keys.add(key)
+            keys.update(_all_keys(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            keys.update(_all_keys(item))
+    return keys
+
+
 def _find_trace_id(event: dict[str, Any]) -> str | None:
     for value in _find_values(event, {"trace_id", "traceId", "dd.trace_id", "trace.id"}):
         if re.fullmatch(r"[0-9a-fA-F]{16,32}", value):
@@ -430,6 +442,8 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
                 "status": "pass" if trace_id and correlated > 0 else "fail",
                 "details": {
                     "query": query,
+                    "events": len(events),
+                    "sample_keys": sorted(_all_keys(events[0])) if events else [],
                     "trace_id": trace_id,
                     "correlated_events": correlated,
                     "message": "correlação ok" if trace_id and correlated else "sem log correlacionado por trace_id",
