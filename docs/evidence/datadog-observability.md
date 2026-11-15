@@ -1,4 +1,13 @@
-# Evidência — Datadog observability (stories 20.1–20.3, 21.1–21.5)
+# Evidência — Datadog observability (stories 19.1–19.5, 20.1–20.3, 21.1–21.5)
+
+> **Estado em 2026-11-15 (19.x):** as stories 19.1–19.5 e as validações
+> 20.3/21.3 estão implementadas e verdes no CI (PR run 43775185765:
+> Terraform, Maven, pytest, scripts e link checker). O run de deploy
+> **43775223421** falhou no **bootstrap** porque o AWS Academy cancelou as
+> credenciais (`voc-cancel-cred`), antes de qualquer apply. A validação live
+> abaixo é a última execução deployada (run 43670113903), anterior às
+> mudanças 19.x. Para fechar a evidência, renove `AWS_ACCESS_KEY_ID`/
+> `AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` nos secrets e rode o workflow.
 
 ## Validação final — 2026-11-15 (conta AWS atual)
 

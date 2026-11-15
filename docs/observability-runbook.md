@@ -1,5 +1,11 @@
 # Runbook — observabilidade (Datadog + OpenTelemetry)
 
+> **Estado em 2026-11-15:** 19.1–19.5 implementados no branch
+> `feature/observability`; o deploy final está bloqueado por credenciais AWS
+> Academy canceladas. As queries abaixo descrevem o alvo **após o deploy**
+> (`trace.http.request`, `messaging.*`, `http.request`); a última validação
+> live é o run 43670113903.
+
 Stories 18.4, 21.1, 21.2, 21.4 e 21.5. Serviços cobertos:
 `lata-velha-os-service`, `lata-velha-inventory-service`,
 `lata-velha-billing-service` (o monolito `lata-velha-api` foi removido).
