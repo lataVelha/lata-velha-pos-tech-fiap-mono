@@ -42,23 +42,23 @@ DEFAULT_DASHBOARD_TITLE = "Lata Velha — Microsserviços"
 # Prefixos reais do setup OTel (ver infra/terraform/observability/locals.tf).
 SERVICES: dict[str, dict[str, object]] = {
     "lata-velha-os-service": {
-        "hits": "trace.org.springframework.boot.server.hits",
-        "errors": "trace.org.springframework.boot.server.errors",
-        "latency": "trace.org.springframework.boot.server",
+        "hits": "trace.http.request.hits",
+        "errors": "trace.http.request.errors",
+        "latency": "trace.http.request",
         "monitored": True,
         "jvm": True,
     },
     "lata-velha-inventory-service": {
-        "hits": "trace.org.springframework.boot.server.hits",
-        "errors": "trace.org.springframework.boot.server.errors",
-        "latency": "trace.org.springframework.boot.server",
+        "hits": "trace.http.request.hits",
+        "errors": "trace.http.request.errors",
+        "latency": "trace.http.request",
         "monitored": True,
         "jvm": True,
     },
     "lata-velha-billing-service": {
-        "hits": "trace.io.opentelemetry.spring_webmvc_6.0.server.hits",
-        "errors": "trace.io.opentelemetry.spring_webmvc_6.0.server.errors",
-        "latency": "trace.io.opentelemetry.spring_webmvc_6.0.server",
+        "hits": "trace.http.request.hits",
+        "errors": "trace.http.request.errors",
+        "latency": "trace.http.request",
         "monitored": True,
         "jvm": True,
     },
@@ -204,6 +204,26 @@ class DatadogClient:
     def list_monitors(self, monitor_tags: str = "managed-by:terraform") -> list[dict[str, Any]]:
         params = urllib.parse.urlencode({"monitor_tags": monitor_tags})
         return _request("GET", f"{self.api_url}/api/v1/monitor?{params}", self.headers)
+
+    def list_events(self, start: datetime, end: datetime, tags: str | None = None) -> dict[str, Any]:
+        params = {"start": int(start.timestamp()), "end": int(end.timestamp())}
+        if tags:
+            params["tags"] = tags
+        return _request("GET", f"{self.api_url}/api/v1/events?{urllib.parse.urlencode(params)}", self.headers)
+
+    def list_synthetics_tests(self) -> dict[str, Any]:
+        return _request("GET", f"{self.api_url}/api/v1/synthetics/tests", self.headers)
+
+    def list_synthetic_results(self, public_id: str, start: datetime, end: datetime) -> dict[str, Any]:
+        params = {
+            "from_ts": int(start.timestamp() * 1000),
+            "to_ts": int(end.timestamp() * 1000),
+        }
+        return _request(
+            "GET",
+            f"{self.api_url}/api/v1/synthetics/tests/{public_id}/results?{urllib.parse.urlencode(params)}",
+            self.headers,
+        )
 
 
 def series_latest(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -604,6 +624,118 @@ def check_alert_routing(client: DatadogClient) -> dict[str, Any]:
     }
 
 
+def check_business_attributes(client: DatadogClient, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-17: atributos de negócio (Story 19.2) presentes nos spans."""
+    checks: list[dict[str, Any]] = []
+    for service, attribute in (
+        ("lata-velha-os-service", "ordem_servico.id"),
+        ("lata-velha-billing-service", "ordem_servico.id"),
+        ("lata-velha-inventory-service", "peca.id"),
+    ):
+        query = f"service:{service} @{attribute}:*"
+        payload = client.search_spans(query, start, end, limit=5)
+        events = payload.get("data", []) or []
+        checks.append(
+            {
+                "service": service,
+                "attribute": attribute,
+                "spans": len(events),
+                "status": "pass" if events else "fail",
+            }
+        )
+    return {
+        "id": "DT-DD-17",
+        "status": "pass" if any(item["status"] == "pass" for item in checks) else "fail",
+        "details": {
+            "checks": checks,
+            "message": "atributos de negócio presentes" if any(item["status"] == "pass" for item in checks) else "nenhum span com atributo de negócio",
+        },
+    }
+
+
+def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-18: evento de alarme CloudWatch chegou ao Datadog (Story 20.3)."""
+    if not alarm_name:
+        return {
+            "id": "DT-DD-18",
+            "status": "skip",
+            "details": {"reason": "nenhum alarme CloudWatch foi forçado nesta execução"},
+        }
+    payload = client.list_events(start, end, tags="source:cloudwatch")
+    events = payload.get("events", []) or []
+    matches = [
+        event for event in events
+        if alarm_name in str(event.get("title", "")) or alarm_name in str(event.get("text", ""))
+    ]
+    return {
+        "id": "DT-DD-18",
+        "status": "pass" if matches else "fail",
+        "details": {
+            "alarm": alarm_name,
+            "events": len(events),
+            "matches": len(matches),
+            "message": "evento CloudWatch chegou ao Datadog" if matches else "evento CloudWatch não encontrado",
+        },
+    }
+
+
+def check_synthetics(client: DatadogClient, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-19: synthetic tests existem e têm resultado na janela (Story 21.3)."""
+    try:
+        payload = client.list_synthetics_tests()
+    except DatadogError as error:
+        return {
+            "id": "DT-DD-19",
+            "status": "skip",
+            "details": {"reason": f"API de synthetics indisponível: {error}"},
+        }
+    tests = payload.get("tests", []) or []
+    wanted = [
+        test for test in tests
+        if "api pública" in str(test.get("name", "")).lower()
+        or "auth-cpf" in str(test.get("name", "")).lower()
+        or "health" in str(test.get("name", "")).lower()
+    ]
+    if not wanted:
+        return {"id": "DT-DD-19", "status": "fail", "details": {"message": "synthetic tests não encontrados"}}
+
+    details: list[dict[str, Any]] = []
+    for test in wanted:
+        public_id = test.get("public_id")
+        if not public_id:
+            continue
+        try:
+            result = client.list_synthetic_results(public_id, start, end)
+        except DatadogError as error:
+            details.append({"name": test.get("name"), "public_id": public_id, "error": str(error), "results": 0})
+            continue
+        results = result.get("results", []) or []
+        details.append(
+            {
+                "name": test.get("name"),
+                "public_id": public_id,
+                "status": test.get("status"),
+                "results": len(results),
+                "last_status": (results[0].get("status") if results else None),
+            }
+        )
+    with_results = [item for item in details if item.get("results", 0) > 0]
+    if not with_results:
+        return {
+            "id": "DT-DD-19",
+            "status": "skip",
+            "details": {
+                "reason": "synthetic tests criados, mas nenhum resultado na janela (aguardar o próximo tick de 5 min)",
+                "tests": details,
+            },
+        }
+    return {
+        "id": "DT-DD-19",
+        "status": "pass",
+        "details": {"tests": details, "message": "resultados de synthetics presentes"},
+    }
+
+
 def check_dashboard(client: DatadogClient) -> dict[str, Any]:
     payload = client.list_dashboards()
     dashboards = payload.get("dashboards", []) or []
@@ -714,6 +846,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--service", action="append", choices=sorted(SERVICES), help="restringe a um serviço")
     parser.add_argument("--api-url", default=os.environ.get("APP_API_URL"))
     parser.add_argument("--aws-integration-enabled", action="store_true")
+    parser.add_argument("--cloudwatch-event", default=os.environ.get("DD_TEST_ALARM_NAME"))
+    parser.add_argument("--synthetic-wait", type=int, default=0, help="segundos de espera antes de consultar synthetics")
     parser.add_argument("--report", default="datadog-report.json")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -758,7 +892,15 @@ def main(argv: list[str] | None = None) -> int:
         checks.append(check_edge_logs(client, start, end))
         checks.append(check_edge_monitors(client))
         checks.append(check_alert_routing(client))
+        checks.append(check_business_attributes(client, start, end))
+        checks.append(check_cloudwatch_event(client, args.cloudwatch_event, start, end))
         checks.append(check_health(args.api_url))
+        if args.synthetic_wait:
+            print(f"Aguardando {args.synthetic_wait}s para o próximo tick dos synthetics...")
+            time.sleep(args.synthetic_wait)
+        synthetic_end = utc_now()
+        synthetic_start = synthetic_end - args.window
+        checks.append(check_synthetics(client, synthetic_start, synthetic_end))
     except DatadogError as error:
         print(f"ERRO Datadog: {error}", file=sys.stderr)
         return 3
@@ -766,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
     print_summary(checks)
     failures = [item for item in checks if item["status"] == "fail"]
     report = {
-        "timestamp": iso(now),
+        "timestamp": iso(utc_now()),
         "env": args.env,
         "window": str(args.window),
         "services": selected,

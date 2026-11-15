@@ -21,6 +21,10 @@ on:
         description: "Segundos de espera antes da primeira consulta"
         type: string
         default: "30"
+      synthetic_wait:
+        description: "Segundos de espera para o primeiro resultado dos synthetics"
+        type: string
+        default: "360"
   # Enquanto o workflow não está na default branch, o workflow_dispatch
   # retorna 404. O gatilho abaixo permite validá-lo na feature branch sem
   # rodar a cada push (só quando o próprio workflow/script muda).
@@ -73,11 +77,37 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"cpf":"111.444.777-35","password":"Admin@123"}' | jq -r '.token')
           curl -s -o /dev/null "$BASE/ordens-servico?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/ordens-servico?id=1" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/proprietarios?page=0&size=5" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/pecas?page=0&size=5" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/billing/v3/api-docs"
           curl -s -o /dev/null "$BASE/pagamentos/ordem-servico/1" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/ordens-servico"
+
+      - name: Forçar alarme CloudWatch (validação 20.3)
+        run: |
+          set -euo pipefail
+          ALARM=$(aws cloudwatch describe-alarms \
+            --query "MetricAlarms[?contains(AlarmName, 'lata-velha')].AlarmName | [0]" \
+            --output text)
+          if [ -z "$ALARM" ] || [ "$ALARM" = "None" ]; then
+            echo "Nenhum alarme lata-velha encontrado; DT-DD-18 será skip"
+            echo "DD_TEST_ALARM_NAME=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "DD_TEST_ALARM_NAME=${ALARM}" >> "$GITHUB_ENV"
+          echo "Forçando ALARM em ${ALARM} para validar EventBridge -> Datadog Events"
+          if ! aws cloudwatch set-alarm-state --alarm-name "$ALARM" \
+              --state-value ALARM \
+              --state-reason "lata-velha 20.3 validation $(date -u +%s)"; then
+            echo "::warning::Não foi possível forçar o alarme (permissão AWS Academy); DT-DD-18 será skip"
+            echo "DD_TEST_ALARM_NAME=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          sleep 25
+          aws cloudwatch set-alarm-state --alarm-name "$ALARM" \
+            --state-value OK \
+            --state-reason "lata-velha 20.3 restore" || true
 
       - name: Verificar Datadog e health
         env:
@@ -85,12 +115,15 @@ jobs:
           DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
           WINDOW: ${{ inputs.window || '30m' }}
           WAIT_SECONDS: ${{ inputs.wait || '30' }}
+          SYNTHETIC_WAIT: ${{ inputs.synthetic_wait || '360' }}
         run: |
           python3 scripts/verify_datadog.py \
             --env prod \
             --window "${WINDOW}" \
             --api-url "$APP_API_URL" \
             --wait "${WAIT_SECONDS}" \
+            --cloudwatch-event "${DD_TEST_ALARM_NAME:-}" \
+            --synthetic-wait "${SYNTHETIC_WAIT}" \
             --report datadog-report.json
 
       - name: Publicar relatório

@@ -19,31 +19,23 @@ Stack gerenciado por Terraform: `infra/terraform/observability`
 
 ## 2. Métricas reais do OTel (este setup)
 
-As queries antigas `trace.http.request.hits` e
-`p95:trace.http.request.duration` **não existem** aqui. O nome da operação
-do span raiz depende da instrumentação:
+A Story 19.3 padronizou o nome da operação do span HTTP server para
+`http.request` via `HttpSpanNameConfig` (um `SpanProcessor` no
+`shared-kernel`). As trace metrics dos 3 serviços EKS são:
 
 | Serviço | Hits/errors | Latência p95 |
 |---|---|---|
-| os | `trace.org.springframework.boot.server.{hits,errors}` | `p95:trace.org.springframework.boot.server` |
-| inventory | `trace.org.springframework.boot.server.{hits,errors}` | `p95:trace.org.springframework.boot.server` |
-| billing | `trace.io.opentelemetry.spring_webmvc_6.0.server.{hits,errors}` | `p95:trace.io.opentelemetry.spring_webmvc_6.0.server` |
+| os | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
+| inventory | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
+| billing | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
 
 - A latência é publicada em **segundos** e a métrica-base é a distribuição
-  de duração (`trace.<operation>`); **não** existe `trace.<operation>.duration`.
+  de duração (`trace.http.request`); **não** existe `.duration`.
 - O baseline em `variables.tf` (`p95_baseline_ms`) é convertido para
   segundos no monitor (`ms / 1000`).
 - O mapa fica em `trace_metric_prefixes` (`infra/terraform/observability/variables.tf`).
   Se a instrumentação mudar, altere só essa variável.
-
-### Por que não padronizar o span name para `http.request`?
-
-O `OpenTelemetryWebConfig` define `operation.name=http.server.request` em um
-span interno, mas a trace metric do span raiz continua no nome da
-instrumentação (`org.springframework.boot.server` ou `spring_webmvc`).
-Padronizar exigiria um `SpanProcessor` customizado nos três `shared-kernel`,
-rebuild/redeploy dos serviços e risco de quebrar o APM/cardinalidade. A opção
-escolhida (menor risco) é mapear os prefixos em Terraform.
+- As Lambdas continuam com `trace.aws.lambda.{hits,errors}`.
 
 ## 3. Encontrar o serviço no APM
 

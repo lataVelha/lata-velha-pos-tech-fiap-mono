@@ -538,12 +538,39 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"cpf":"111.444.777-35","password":"Admin@123"}' | jq -r '.token')
           curl -s -o /dev/null "$BASE/ordens-servico?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          # Story 19.2: o filtro por id gera o atributo ordem_servico.id no span.
+          curl -s -o /dev/null "$BASE/ordens-servico?id=1" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/proprietarios?page=0&size=5" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/pecas?page=0&size=5" -H "Authorization: Bearer $TOKEN"
           curl -s -o /dev/null "$BASE/billing/v3/api-docs"
           curl -s -o /dev/null "$BASE/pagamentos/ordem-servico/1" -H "Authorization: Bearer $TOKEN"
           # Sem token: exercita o jwt-authorizer (negação de negócio).
           curl -s -o /dev/null "$BASE/ordens-servico"
+
+      - name: Forçar alarme CloudWatch (validação 20.3)
+        run: |
+          set -euo pipefail
+          ALARM=$(aws cloudwatch describe-alarms \
+            --query "MetricAlarms[?contains(AlarmName, 'lata-velha')].AlarmName | [0]" \
+            --output text)
+          if [ -z "$ALARM" ] || [ "$ALARM" = "None" ]; then
+            echo "Nenhum alarme lata-velha encontrado; DT-DD-18 será skip"
+            echo "DD_TEST_ALARM_NAME=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "DD_TEST_ALARM_NAME=${ALARM}" >> "$GITHUB_ENV"
+          echo "Forçando ALARM em ${ALARM} para validar EventBridge -> Datadog Events"
+          if ! aws cloudwatch set-alarm-state --alarm-name "$ALARM" \
+              --state-value ALARM \
+              --state-reason "lata-velha 20.3 validation $(date -u +%s)"; then
+            echo "::warning::Não foi possível forçar o alarme (permissão AWS Academy); DT-DD-18 será skip"
+            echo "DD_TEST_ALARM_NAME=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          sleep 25
+          aws cloudwatch set-alarm-state --alarm-name "$ALARM" \
+            --state-value OK \
+            --state-reason "lata-velha 20.3 restore" || true
 
       - name: Verificar Datadog e health
         env:
@@ -555,6 +582,8 @@ jobs:
             --window 2h \
             --api-url "$APP_API_URL" \
             --wait 120 \
+            --cloudwatch-event "${DD_TEST_ALARM_NAME:-}" \
+            --synthetic-wait 360 \
             --report datadog-report.json
 
       - name: Publicar relatório
