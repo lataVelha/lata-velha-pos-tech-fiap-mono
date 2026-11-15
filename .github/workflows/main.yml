@@ -204,8 +204,10 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout do código
+      - name: Checkout do código (com submódulos para o link checker)
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Configurar Python 3.12
         uses: actions/setup-python@v5
