@@ -478,18 +478,28 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
                 correlated = len(result.get("data", []) or [])
                 if correlated:
                     break
+        details: dict[str, Any] = {
+            "query": base_query,
+            "events": len(base_events),
+            "sample_keys": sorted(_all_keys(base_events[0])) if base_events else [],
+            "trace_id": trace_id,
+            "correlated_events": correlated,
+            "message": "trace_id presente no log" if trace_id else "nenhum log com trace_id",
+        }
+        if service == "lata-velha-auth-cpf" and base_events:
+            details["sample_messages"] = [
+                str(
+                    ((event.get("attributes") or {}).get("message") if isinstance(event.get("attributes"), dict) else None)
+                    or event.get("message")
+                    or ""
+                )[:400]
+                for event in base_events[:3]
+            ]
         checks.append(
             {
                 "id": f"DT-DD-12/{service}",
                 "status": "pass" if trace_id else "fail",
-                "details": {
-                    "query": base_query,
-                    "events": len(base_events),
-                    "sample_keys": sorted(_all_keys(base_events[0])) if base_events else [],
-                    "trace_id": trace_id,
-                    "correlated_events": correlated,
-                    "message": "trace_id presente no log" if trace_id else "nenhum log com trace_id",
-                },
+                "details": details,
             }
         )
     return checks
