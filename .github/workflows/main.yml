@@ -212,10 +212,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Compilar e testar verify_datadog.py
+      - name: Compilar, testar e validar links dos docs
         run: |
-          python3 -m py_compile scripts/verify_datadog.py
+          python3 -m py_compile scripts/verify_datadog.py scripts/import_datadog_monitors.py scripts/check_doc_links.py
           python3 -m unittest discover -s scripts/tests -v
+          python3 scripts/check_doc_links.py docs
 
   validate:
     name: "CI · Validação dos submódulos"
@@ -273,11 +274,12 @@ jobs:
     # no ALB compartilhado. Sem essa ordem, o apply do addons falharia com
     # "ELBv2 Target Group already exists" na migracao.
     needs: [deploy-infra-bootstrap, deploy-billing-service]
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       # O monolito foi removido: paths nao roteados viram 404 (catch-all).
       app_enabled: false
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -324,7 +326,14 @@ jobs:
       - name: Resolver bucket de estado (S3)
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=${ACCOUNT_ID}" >> "$GITHUB_ENV"
           echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> "$GITHUB_ENV"
+
+      - name: Descobrir URL pública (synthetics)
+        run: |
+          aws s3 cp "s3://${STATE_BUCKET}/lata-velha/infra-addons/terraform.tfstate" /tmp/addons.tfstate > /dev/null
+          APP_URL=$(jq -r '.outputs.app_api_endpoint.value' /tmp/addons.tfstate)
+          echo "APP_API_URL=${APP_URL}" >> "$GITHUB_ENV"
 
       - name: Exportar variáveis opcionais
         env:
@@ -364,6 +373,8 @@ jobs:
           TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
           TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
           TF_VAR_aws_integration_enabled: "false"
+          TF_VAR_app_api_url: ${{ env.APP_API_URL }}
+          TF_VAR_aws_account_id: ${{ env.ACCOUNT_ID }}
         run: |
           terraform -chdir=infra/terraform/observability apply -auto-approve
 
@@ -390,13 +401,18 @@ jobs:
     # A lambda auth-cpf le o RDS do os-service; por isso depende do deploy
     # do os-service (e do addons, onde registra a authorizer).
     needs: [deploy-infra-addons, deploy-os-service]
-    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
+    # Branch da feature: o workflow do lambda aceita `ref` e faz checkout
+    # dessa branch. Ao mergear na master, voltar para @master e remover o
+    # input `ref` (ou deixar o default master).
+    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
 
   # ============================================================
   # CD · WORKLOADS — os, inventory e billing rodam EM PARALELO.
@@ -464,6 +480,8 @@ jobs:
       - deploy-os-service
       - deploy-inventory-service
       - deploy-billing-service
+      - deploy-lambda
+      - deploy-edge
     if: >
       always() &&
       github.event_name != 'pull_request' &&
@@ -472,7 +490,9 @@ jobs:
       needs.deploy-observability.result == 'success' &&
       needs.deploy-os-service.result == 'success' &&
       needs.deploy-inventory-service.result == 'success' &&
-      needs.deploy-billing-service.result == 'success'
+      needs.deploy-billing-service.result == 'success' &&
+      needs.deploy-lambda.result == 'success' &&
+      needs.deploy-edge.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -502,6 +522,23 @@ jobs:
           aws s3 cp "s3://${STATE_BUCKET}/lata-velha/infra-addons/terraform.tfstate" /tmp/addons.tfstate > /dev/null
           APP_URL=$(jq -r '.outputs.app_api_endpoint.value' /tmp/addons.tfstate)
           echo "APP_API_URL=${APP_URL}" >> "$GITHUB_ENV"
+
+      # Gera tráfego real em todos os serviços e nas duas Lambdas antes do
+      # gate: sem isso, trace_id/logs/Lambda podem estar sem dados na janela.
+      - name: Gerar tráfego de verificação (EKS + Lambda)
+        run: |
+          set -euo pipefail
+          BASE="${APP_API_URL%/}"
+          TOKEN=$(curl -sf -X POST "$BASE/auth/cpf" \
+            -H 'Content-Type: application/json' \
+            -d '{"cpf":"111.444.777-35","password":"Admin@123"}' | jq -r '.token')
+          curl -s -o /dev/null "$BASE/ordens-servico?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/proprietarios?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/pecas?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/billing/v3/api-docs"
+          curl -s -o /dev/null "$BASE/pagamentos/ordem-servico/1" -H "Authorization: Bearer $TOKEN"
+          # Sem token: exercita o jwt-authorizer (negação de negócio).
+          curl -s -o /dev/null "$BASE/ordens-servico"
 
       - name: Verificar Datadog e health
         env:
@@ -611,10 +648,11 @@ jobs:
   destroy-lambda:
     name: "CD · Destruir · lambda"
     needs: destroy-inventory-service
-    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master
+    uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -691,10 +729,11 @@ jobs:
   destroy-infra-addons:
     name: "CD · Destruir · infra (addons)"
     needs: destroy-observability
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@master
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/addons.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

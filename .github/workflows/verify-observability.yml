@@ -65,6 +65,20 @@ jobs:
           echo "APP_API_URL=${APP_URL}" >> "$GITHUB_ENV"
           echo "API: ${APP_URL}"
 
+      - name: Gerar tráfego de verificação (EKS + Lambda)
+        run: |
+          set -euo pipefail
+          BASE="${APP_API_URL%/}"
+          TOKEN=$(curl -sf -X POST "$BASE/auth/cpf" \
+            -H 'Content-Type: application/json' \
+            -d '{"cpf":"111.444.777-35","password":"Admin@123"}' | jq -r '.token')
+          curl -s -o /dev/null "$BASE/ordens-servico?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/proprietarios?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/pecas?page=0&size=5" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/billing/v3/api-docs"
+          curl -s -o /dev/null "$BASE/pagamentos/ordem-servico/1" -H "Authorization: Bearer $TOKEN"
+          curl -s -o /dev/null "$BASE/ordens-servico"
+
       - name: Verificar Datadog e health
         env:
           DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}

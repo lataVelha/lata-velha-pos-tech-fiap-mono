@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -39,21 +40,43 @@ from typing import Any
 DEFAULT_DASHBOARD_TITLE = "Lata Velha — Microsserviços"
 
 # Prefixos reais do setup OTel (ver infra/terraform/observability/locals.tf).
-SERVICES: dict[str, dict[str, str]] = {
+SERVICES: dict[str, dict[str, object]] = {
     "lata-velha-os-service": {
         "hits": "trace.org.springframework.boot.server.hits",
         "errors": "trace.org.springframework.boot.server.errors",
         "latency": "trace.org.springframework.boot.server",
+        "monitored": True,
+        "jvm": True,
     },
     "lata-velha-inventory-service": {
         "hits": "trace.org.springframework.boot.server.hits",
         "errors": "trace.org.springframework.boot.server.errors",
         "latency": "trace.org.springframework.boot.server",
+        "monitored": True,
+        "jvm": True,
     },
     "lata-velha-billing-service": {
         "hits": "trace.io.opentelemetry.spring_webmvc_6.0.server.hits",
         "errors": "trace.io.opentelemetry.spring_webmvc_6.0.server.errors",
         "latency": "trace.io.opentelemetry.spring_webmvc_6.0.server",
+        "monitored": True,
+        "jvm": True,
+    },
+    # Lambdas (Story 20.1 / 21.2). O nome é o DD_SERVICE configurado no
+    # Terraform; trace.aws.lambda.* é a trace metric root da extension.
+    "lata-velha-auth-cpf": {
+        "hits": "trace.aws.lambda.hits",
+        "errors": "trace.aws.lambda.errors",
+        "latency": "trace.aws.lambda",
+        "monitored": False,
+        "jvm": False,
+    },
+    "lata-velha-jwt-authorizer": {
+        "hits": "trace.aws.lambda.hits",
+        "errors": "trace.aws.lambda.errors",
+        "latency": "trace.aws.lambda",
+        "monitored": False,
+        "jvm": False,
     },
 }
 
@@ -134,21 +157,21 @@ class DatadogClient:
         )
         return _request("GET", f"{self.api_url}/api/v1/query?{params}", self.headers)
 
-    def search_logs(self, query: str, start: datetime, end: datetime) -> dict[str, Any]:
+    def search_logs(self, query: str, start: datetime, end: datetime, limit: int = 1) -> dict[str, Any]:
         body = {
             "filter": {"query": query, "from": iso(start), "to": iso(end)},
-            "page": {"limit": 1},
+            "page": {"limit": limit},
             "sort": "timestamp",
         }
         return _request("POST", f"{self.api_url}/api/v2/logs/events/search", self.headers, body)
 
-    def search_spans(self, query: str, start: datetime, end: datetime) -> dict[str, Any]:
+    def search_spans(self, query: str, start: datetime, end: datetime, limit: int = 1) -> dict[str, Any]:
         body = {
             "data": {
                 "type": "search_request",
                 "attributes": {
                     "filter": {"query": query, "from": iso(start), "to": iso(end)},
-                    "page": {"limit": 1},
+                    "page": {"limit": limit},
                     "sort": "timestamp",
                 },
             }
@@ -256,9 +279,11 @@ def check_latency(client: DatadogClient, services: dict[str, dict[str, str]], en
     return checks
 
 
-def check_jvm(client: DatadogClient, services: dict[str, dict[str, str]], env: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
+def check_jvm(client: DatadogClient, services: dict[str, dict[str, object]], env: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
     checks = []
-    for service in services:
+    for service, metadata in services.items():
+        if not metadata.get("jvm", True):
+            continue
         item = check_metric(
             client,
             f"DT-DD-04/{service}",
@@ -308,6 +333,191 @@ def check_spans(client: DatadogClient, services: dict[str, dict[str, str]], star
     return checks
 
 
+def _iter_strings(value: Any):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _iter_strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_strings(item)
+
+
+def _find_values(value: Any, keys: set[str]):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in keys and isinstance(item, str) and item.strip():
+                yield item.strip()
+            yield from _find_values(item, keys)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _find_values(item, keys)
+
+
+def _find_trace_id(event: dict[str, Any]) -> str | None:
+    for value in _find_values(event, {"trace_id", "traceId", "dd.trace_id", "trace.id"}):
+        if re.fullmatch(r"[0-9a-fA-F]{16,32}", value):
+            return value
+    for text in _iter_strings(event):
+        match = re.search(r"(?:trace_id|traceId)[\"':=\s]+([0-9a-fA-F]{16,32})", text)
+        if match:
+            return match.group(1)
+    return None
+
+
+def check_tags(client: DatadogClient, services: dict[str, dict[str, object]], env: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """DT-DD-11: todo span precisa ter service, env e version (não vazio)."""
+    checks = []
+    for service in services:
+        query = f"service:{service} env:{env}"
+        payload = client.search_spans(query, start, end, limit=10)
+        events = payload.get("data", []) or []
+        versions: list[str] = []
+        for event in events:
+            versions.extend(_find_values(event, {"version", "service.version", "dd.version"}))
+            for text in _iter_strings(event):
+                if text.startswith("version:"):
+                    versions.append(text.split(":", 1)[1].strip())
+        versions = [value for value in versions if value]
+        checks.append(
+            {
+                "id": f"DT-DD-11/{service}",
+                "status": "pass" if versions else "fail",
+                "details": {
+                    "query": query,
+                    "spans": len(events),
+                    "versions": versions[:5],
+                    "message": "version presente" if versions else "span sem version",
+                },
+            }
+        )
+    return checks
+
+
+def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, object]], start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """DT-DD-12: log com trace_id e pelo menos uma linha correlacionada."""
+    checks = []
+    for service in services:
+        query = f"service:{service} @trace_id:*"
+        payload = client.search_logs(query, start, end, limit=10)
+        events = payload.get("data", []) or []
+        trace_id = next((_find_trace_id(event) for event in events if _find_trace_id(event)), None)
+        correlated = 0
+        if trace_id:
+            result = client.search_logs(f"@trace_id:{trace_id}", start, end, limit=5)
+            correlated = len(result.get("data", []) or [])
+        checks.append(
+            {
+                "id": f"DT-DD-12/{service}",
+                "status": "pass" if trace_id and correlated > 0 else "fail",
+                "details": {
+                    "query": query,
+                    "trace_id": trace_id,
+                    "correlated_events": correlated,
+                    "message": "correlação ok" if trace_id and correlated else "sem log correlacionado por trace_id",
+                },
+            }
+        )
+    return checks
+
+
+def find_first_trace_id(client: DatadogClient, service: str, env: str, start: datetime, end: datetime) -> str | None:
+    payload = client.search_spans(f"service:{service} env:{env}", start, end, limit=10)
+    for event in payload.get("data", []) or []:
+        trace_id = _find_trace_id(event)
+        if trace_id:
+            return trace_id
+    return None
+
+
+def check_duplicate_spans(client: DatadogClient, trace_id: str | None, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-13: no máximo 1 span server por serviço/rota no trace."""
+    if not trace_id:
+        return {
+            "id": "DT-DD-13",
+            "status": "fail",
+            "details": {"message": "nenhum trace_id encontrado para validar duplicação"},
+        }
+    query = f"trace_id:{trace_id}"
+    payload = client.search_spans(query, start, end, limit=100)
+    events = payload.get("data", []) or []
+    counts: dict[tuple[str, str], int] = {}
+    for event in events:
+        service = next(iter(_find_values(event, {"service"})), "?")
+        route = next(iter(_find_values(event, {"http.route", "http.route", "resource.name"})), "?")
+        kind = next(iter(_find_values(event, {"span.kind", "span_kind", "span.type"})), "")
+        if kind.lower() in {"server", "1"} or route != "?":
+            counts[(service, route)] = counts.get((service, route), 0) + 1
+    duplicates = [f"{service}:{route} x{count}" for (service, route), count in counts.items() if count > 1]
+    return {
+        "id": "DT-DD-13",
+        "status": "pass" if events and not duplicates else "fail",
+        "details": {
+            "query": query,
+            "trace_id": trace_id,
+            "spans": len(events),
+            "counts": {f"{service}:{route}": count for (service, route), count in counts.items()},
+            "duplicates": duplicates,
+            "message": "sem duplicação" if events and not duplicates else "trace sem spans ou com duplicação",
+        },
+    }
+
+
+def check_edge_logs(client: DatadogClient, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-14: access logs do API Gateway chegaram ao Datadog (sem IP/PII)."""
+    query = "service:lata-velha-edge source:apigateway"
+    payload = client.search_logs(query, start, end, limit=5)
+    events = payload.get("data", []) or []
+    leaked_ip = any("sourceIp" in json.dumps(event) for event in events)
+    return {
+        "id": "DT-DD-14",
+        "status": "pass" if events and not leaked_ip else "fail",
+        "details": {
+            "query": query,
+            "events": len(events),
+            "ip_leak": leaked_ip,
+            "message": "logs de borda presentes" if events and not leaked_ip else "sem logs de borda ou IP vazou",
+        },
+    }
+
+
+def check_edge_monitors(client: DatadogClient) -> dict[str, Any]:
+    """DT-DD-15: monitores de 5xx/latência de borda existem."""
+    names = [item.get("name", "") for item in client.list_monitors()]
+    has_5xx = any("Edge" in name and "5xx" in name for name in names)
+    has_latency = any("Edge" in name and ("latência" in name or "latency" in name.lower()) for name in names)
+    return {
+        "id": "DT-DD-15",
+        "status": "pass" if has_5xx and has_latency else "fail",
+        "details": {
+            "edge_5xx": has_5xx,
+            "edge_latency": has_latency,
+            "message": "monitores de borda presentes" if has_5xx and has_latency else "faltam monitores de borda",
+        },
+    }
+
+
+def check_alert_routing(client: DatadogClient) -> dict[str, Any]:
+    """DT-DD-16: monitores com canal de notificação (@) configurado."""
+    monitors = client.list_monitors()
+    with_notification = [item.get("name") for item in monitors if "@" in (item.get("message") or "")]
+    if not with_notification:
+        return {
+            "id": "DT-DD-16",
+            "status": "skip",
+            "details": {
+                "reason": "TF_VAR_alert_recipients vazio/ausente — monitores não notificam ninguém (PENDING Story 21.4)",
+                "monitors": len(monitors),
+            },
+        }
+    return {
+        "id": "DT-DD-16",
+        "status": "pass",
+        "details": {"monitors_with_notification": len(with_notification), "sample": with_notification[:3]},
+    }
+
+
 def check_dashboard(client: DatadogClient) -> dict[str, Any]:
     payload = client.list_dashboards()
     dashboards = payload.get("dashboards", []) or []
@@ -336,8 +546,9 @@ def check_monitors(client: DatadogClient) -> dict[str, Any]:
         {
             f"{needle}/{service}"
             for needle in required
-            for service in SERVICES
-            if not any(needle in name and service in name for name in names)
+            for service, metadata in SERVICES.items()
+            if metadata.get("monitored", True)
+            and not any(needle in name and service in name for name in names)
         }
     )
     states = {item.get("name"): item.get("overall_state") for item in monitors}
@@ -451,9 +662,16 @@ def main(argv: list[str] | None = None) -> int:
         checks.extend(check_jvm(client, services, args.env, start, end))
         checks.extend(check_logs(client, services, start, end))
         checks.extend(check_spans(client, services, start, end))
+        checks.extend(check_tags(client, services, args.env, start, end))
+        checks.extend(check_log_correlation(client, services, start, end))
+        primary = next((name for name in selected if SERVICES[name].get("monitored", True)), selected[0])
+        checks.append(check_duplicate_spans(client, find_first_trace_id(client, primary, args.env, start, end), start, end))
         checks.append(check_dashboard(client))
         checks.append(check_monitors(client))
         checks.append(check_sqs(client, start, end, args.aws_integration_enabled))
+        checks.append(check_edge_logs(client, start, end))
+        checks.append(check_edge_monitors(client))
+        checks.append(check_alert_routing(client))
         checks.append(check_health(args.api_url))
     except DatadogError as error:
         print(f"ERRO Datadog: {error}", file=sys.stderr)
