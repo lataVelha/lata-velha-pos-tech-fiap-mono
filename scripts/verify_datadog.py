@@ -461,7 +461,7 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
     checks = []
     for service in services:
         base_query = f"service:{service}"
-        base_payload = client.search_logs(base_query, start, end, limit=20)
+        base_payload = client.search_logs(base_query, start, end, limit=100)
         base_events = base_payload.get("data", []) or []
 
         trace_id = next(
