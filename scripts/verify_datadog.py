@@ -428,6 +428,10 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
     """DT-DD-12: log com trace_id e pelo menos uma linha correlacionada."""
     checks = []
     for service in services:
+        base_query = f"service:{service}"
+        base_payload = client.search_logs(base_query, start, end, limit=5)
+        base_events = base_payload.get("data", []) or []
+
         query = f"service:{service} @trace_id:*"
         payload = client.search_logs(query, start, end, limit=10)
         events = payload.get("data", []) or []
@@ -442,6 +446,9 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
                 "status": "pass" if trace_id and correlated > 0 else "fail",
                 "details": {
                     "query": query,
+                    "base_query": base_query,
+                    "base_events": len(base_events),
+                    "base_sample_keys": sorted(_all_keys(base_events[0])) if base_events else [],
                     "events": len(events),
                     "sample_keys": sorted(_all_keys(events[0])) if events else [],
                     "trace_id": trace_id,
