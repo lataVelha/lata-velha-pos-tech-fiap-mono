@@ -69,12 +69,14 @@ jobs:
         env:
           DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
+          WINDOW: ${{ inputs.window || '30m' }}
+          WAIT_SECONDS: ${{ inputs.wait || '30' }}
         run: |
           python3 scripts/verify_datadog.py \
             --env prod \
-            --window "${{ inputs.window }}" \
+            --window "${WINDOW}" \
             --api-url "$APP_API_URL" \
-            --wait "${{ inputs.wait }}" \
+            --wait "${WAIT_SECONDS}" \
             --report datadog-report.json
 
       - name: Publicar relatório
