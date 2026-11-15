@@ -108,13 +108,25 @@ def parse_window(value: str) -> timedelta:
     raise argparse.ArgumentTypeError("janela inválida; use 30m, 1h, 2h...")
 
 
+# O gate passou a consultar 5 serviços + borda; sem espaçamento a API do
+# Datadog devolve 429. Mantém no máximo ~2 req/s e faz backoff maior em 429.
+_MIN_INTERVAL_SECONDS = 0.5
+_last_request_at = 0.0
+
+
 def _request(
     method: str,
     url: str,
     headers: dict[str, str],
     body: dict[str, Any] | None = None,
-    retries: int = 3,
+    retries: int = 4,
 ) -> Any:
+    global _last_request_at
+    elapsed = time.monotonic() - _last_request_at
+    if elapsed < _MIN_INTERVAL_SECONDS:
+        time.sleep(_MIN_INTERVAL_SECONDS - elapsed)
+    _last_request_at = time.monotonic()
+
     payload = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
     last_error: Exception | None = None
@@ -131,9 +143,14 @@ def _request(
                     "403 Forbidden: verifique DD_API_KEY/DD_APP_KEY e os escopos "
                     f"de leitura de métricas/logs/spans/monitores. Resposta: {detail}",
                 ) from error
-            if error.code == 429 or error.code >= 500:
+            if error.code == 429:
+                # Rate limit do Datadog: espera mais que o backoff normal.
                 last_error = error
-                time.sleep(2 ** attempt)
+                time.sleep(min(30, 2 ** (attempt + 2)))
+                continue
+            if error.code >= 500:
+                last_error = error
+                time.sleep(min(30, 2 ** attempt))
                 continue
             raise DatadogError(error.code, f"HTTP {error.code}: {detail}") from error
         except urllib.error.URLError as error:
