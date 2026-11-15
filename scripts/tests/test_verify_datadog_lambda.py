@@ -28,14 +28,12 @@ class NoTagsClient:
 
 
 class LogClient:
-    def __init__(self):
-        self.calls = 0
-
     def search_logs(self, query, start, end, limit=1):
-        self.calls += 1
-        if self.calls == 1:
+        if query.startswith("@trace_id:"):
+            return {"data": [{"id": "correlated"}]}
+        if "@trace_id" in query:
             return {"data": [{"attributes": {"attributes": {"trace_id": "0123456789abcdef"}}}]}
-        return {"data": [{"id": "correlated"}]}
+        return {"data": [{"attributes": {"service": "lata-velha-auth-cpf"}}]}
 
 
 class DuplicateClient:
