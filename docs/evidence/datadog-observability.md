@@ -1,6 +1,35 @@
-# Evidência — Datadog observability (stories 21.1/21.2/21.5)
+# Evidência — Datadog observability (stories 20.1–20.3, 21.1–21.5)
 
-Validação real executada em **2026-11-14** contra `env:prod`, site `us5`.
+## Validação final — 2026-11-15 (conta AWS atual)
+
+Execução de ponta a ponta: **run 43670113903** (workflow_dispatch,
+`feature/observability`), **success**.
+Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-report.json).
+
+- **Endpoint público:** `https://k6ateatqnh.execute-api.us-east-1.amazonaws.com`
+- **Dashboard:** `z66-twc-mdm` — 15 widgets
+- **Monitores:** 16 (`missing=[]`, `alerting=[]`)
+- **Gate:** 45 pass / 0 fail / 1 skip (SQS, justificado no AWS Academy)
+- **Alert routing:** 2 monitores de borda com `@` configurado; demais monitores usam `TF_VAR_alert_recipients`
+
+| Camada | Serviço | Hits (2h) | p95 | JVM/observação |
+|---|---|---:|---:|---|
+| EKS | os-service | 19.0 | 8.4 ms | heap 28.7 MB |
+| EKS | inventory-service | 19.2 | 13.0 ms | heap 17.2 MB |
+| EKS | billing-service | 17.0 | 6.8 ms | heap 22.7 MB |
+| Lambda | auth-cpf | 2.0 | 1.11 s (cold start) | `trace.aws.lambda.*` |
+| Lambda | jwt-authorizer | 1.0 | 184 ms | `trace.aws.lambda.*` |
+| Borda | API Gateway | — | — | 5 logs, `ip_leak=false` |
+
+Também passaram: tags `service/env/version` nos 5 serviços, correlação
+log↔trace por `trace_id` nos 5, ausência de spans duplicados, logs de borda
+com `source:apigateway` e monitores de 5xx/latência de borda.
+
+## Histórico — 2026-11-14 (conta AWS anterior)
+
+Validação real executada em **2026-11-14** contra `env:prod`, site `us5`,
+na conta AWS anterior (`we5lklh1vk`). Os IDs/endpoint abaixo são históricos;
+a validação atual está na seção acima.
 Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-report.json).
 
 ## PRs e runs
@@ -72,6 +101,6 @@ DD_API_KEY=... DD_APP_KEY=... ./apply.sh --auto
 cd ../../..
 DD_API_KEY=... DD_APP_KEY=... \
   python3 scripts/verify_datadog.py --env prod --window 2h \
-    --api-url https://we5lklh1vk.execute-api.us-east-1.amazonaws.com \
+    --api-url https://k6ateatqnh.execute-api.us-east-1.amazonaws.com \
     --report docs/evidence/datadog-observability-report.json
 ```

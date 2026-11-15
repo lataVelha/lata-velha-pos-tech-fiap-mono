@@ -178,6 +178,11 @@ kubectl logs -n datadog ds/datadog --tail=100 | grep -i otlp
 | Trace metrics hits/p95/errors | ✅ relatório `datadog-report` |
 | JVM heap/max dos 3 serviços | ✅ relatório `datadog-report` |
 | Health público 200/UP | ✅ `DT-DD-10` |
+| Lambda auth-cpf/jwt-authorizer no APM | ✅ `DT-DD-01/03/11/12` (hits, p95, version, trace_id) |
+| Logs de borda do API Gateway | ✅ `DT-DD-14` (5 eventos, sem IP) |
+| Monitores de 5xx/latência de borda | ✅ `DT-DD-15` |
+| SLOs e synthetics aplicados | ✅ `slos.tf`/`synthetics.tf` |
+| Fallback CloudWatch → Datadog Events | ✅ recursos aplicados; entrega depende de alarme real |
 | SQS | ⚠️ N/A no AWS Academy; alarmes CloudWatch documentados |
 
 Evidência principal: [`docs/evidence/datadog-observability.md`](./evidence/datadog-observability.md)
@@ -195,3 +200,70 @@ Um engenheiro novo deve conseguir, seguindo este runbook:
 5. rodar `apply.sh --plan` e `verify_datadog.py` com segurança.
 
 Se algum passo falhar, abra issue e atualize este documento.
+
+## 13. Lambda (serverless)
+
+As duas Lambdas de autenticação são instrumentadas pela **Datadog Lambda
+Extension** + `datadog-lambda` (Story 20.1). A extensão envia direto ao site
+`us5`, sem depender da integração AWS.
+
+| Função | `DD_SERVICE` | Queries principais |
+|---|---|---|
+| `auth-cpf` | `lata-velha-auth-cpf` | `sum:trace.aws.lambda.hits{service:lata-velha-auth-cpf,env:prod}`, `p95:trace.aws.lambda{...}` |
+| `jwt-authorizer` | `lata-velha-jwt-authorizer` | idem, com o nome da authorizer |
+
+- Env: `DD_API_KEY` (secret), `DD_SITE=us5.datadoghq.com`, `DD_ENV=prod`,
+  `DD_VERSION=<sha>`, `DD_TRACE_ENABLED=true`, `DD_LOGS_INJECTION=true`,
+  `DD_SERVERLESS_LOGS_ENABLED=true`.
+- Layer: `Datadog-Extension:103` em `us-east-1`.
+- Os handlers logam JSON com `trace_id`/`span_id`; a negação do authorizer é
+  `auth.result=denied` (decisão de negócio, não 5xx).
+- Cold start: `p95:trace.aws.lambda` da auth-cpf pode chegar a ~1s; o baseline
+  dos serviços EKS não se aplica a Lambda.
+
+## 14. Borda (API Gateway)
+
+O access log do API Gateway (`/aws/apigateway/lata-velha-app-api`) é JSON,
+**sem IP/PII**, e uma subscription filter invoca a Lambda `logs-forwarder`.
+Ela faz allowlist dos campos e envia ao Datadog Logs API com
+`service:lata-velha-edge`, `source:apigateway`, `env:prod`.
+
+```
+logs("service:lata-velha-edge source:apigateway env:prod @http.status_code:>=500").index("*").rollup("count").last("5m") > 5
+logs("service:lata-velha-edge source:apigateway env:prod @response_latency:>1000").index("*").rollup("count").last("5m") > 10
+```
+
+Monitores: `[prod] Edge (API Gateway) — 5xx acima de 5 em 5 min` e
+`— latência > 1s`. O forwarder nunca envia `sourceIp`, body, query string ou
+headers.
+
+## 15. SLOs, synthetic tests e fallback AWS
+
+- **SLOs** (`slos.tf`): disponibilidade 99.5% (warning 99.9%) e latência p95
+  dentro do baseline, por serviço EKS, 30 dias.
+- **Synthetics** (`synthetics.tf`): `GET /actuator/health` e
+  `GET /auth/cpf-openapi.json` a cada 5 min, 3 localizações, sem dados sensíveis.
+- **Fallback AWS** (`cloudwatch-events.tf`): quando
+  `aws_integration_enabled=false`, um EventBridge rule encaminha
+  `CloudWatch Alarm State Change` para o Datadog Events via API destination.
+  No AWS Academy a role usada é a `LabRole`; a entrega depende de um alarme
+  real disparar.
+- `TF_VAR_alert_recipients` configura os `@` dos monitores; o gate
+  `DT-DD-16` reporta `skip` explícito quando o secret está vazio.
+
+## 16. Critérios DT-DD do gate atual
+
+| Código | Critério |
+|---|---|
+| `DT-DD-01..03` | hits, erros e p95 dos 3 EKS + 2 Lambdas |
+| `DT-DD-04` | JVM heap/max dos 3 EKS |
+| `DT-DD-05..06` | logs e spans dos 5 serviços |
+| `DT-DD-07..08` | dashboard e monitores gerenciados |
+| `DT-DD-09` | SQS (skip justificado no Academy) |
+| `DT-DD-10` | health público 200/UP |
+| `DT-DD-11` | tags `service/env/version` nos 5 serviços |
+| `DT-DD-12` | correlação log↔trace por `trace_id` nos 5 serviços |
+| `DT-DD-13` | ausência de spans duplicados no trace |
+| `DT-DD-14` | logs de borda no Datadog, sem IP |
+| `DT-DD-15` | monitores de 5xx/latência de borda |
+| `DT-DD-16` | canal de notificação dos monitores |

@@ -1,13 +1,29 @@
 {
-  "timestamp": "2026-11-14T20:33:25Z",
+  "timestamp": "2026-11-15T03:08:36Z",
   "env": "prod",
   "window": "2:00:00",
   "services": [
+    "lata-velha-auth-cpf",
     "lata-velha-billing-service",
     "lata-velha-inventory-service",
+    "lata-velha-jwt-authorizer",
     "lata-velha-os-service"
   ],
   "checks": [
+    {
+      "id": "DT-DD-01/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.aws.lambda.hits{service:lata-velha-auth-cpf,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-auth-cpf",
+            "point": 2.0
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
     {
       "id": "DT-DD-01/lata-velha-billing-service",
       "status": "pass",
@@ -16,7 +32,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 16.0
+            "point": 17.0
           }
         ],
         "message": "série encontrada"
@@ -30,7 +46,21 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 17.5
+            "point": 19.166666666666668
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-01/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.aws.lambda.hits{service:lata-velha-jwt-authorizer,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-jwt-authorizer",
+            "point": 1.0
           }
         ],
         "message": "série encontrada"
@@ -48,6 +78,15 @@
           }
         ],
         "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-02/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.aws.lambda.errors{service:lata-velha-auth-cpf,env:prod} by {service}",
+        "series": [],
+        "message": "sem erros na janela"
       }
     },
     {
@@ -69,12 +108,35 @@
       }
     },
     {
+      "id": "DT-DD-02/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "sum:trace.aws.lambda.errors{service:lata-velha-jwt-authorizer,env:prod} by {service}",
+        "series": [],
+        "message": "sem erros na janela"
+      }
+    },
+    {
       "id": "DT-DD-02/lata-velha-os-service",
       "status": "pass",
       "details": {
         "query": "sum:trace.org.springframework.boot.server.errors{service:lata-velha-os-service,env:prod} by {service}",
         "series": [],
         "message": "sem erros na janela"
+      }
+    },
+    {
+      "id": "DT-DD-03/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "p95:trace.aws.lambda{service:lata-velha-auth-cpf,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-auth-cpf",
+            "point": 1.1133556365966797
+          }
+        ],
+        "message": "série encontrada"
       }
     },
     {
@@ -85,7 +147,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 0.0029851657735229216
+            "point": 0.006789499090685983
           }
         ],
         "message": "série encontrada"
@@ -99,7 +161,21 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 0.0033793682140686667
+            "point": 0.013020864100417619
+          }
+        ],
+        "message": "série encontrada"
+      }
+    },
+    {
+      "id": "DT-DD-03/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "p95:trace.aws.lambda{service:lata-velha-jwt-authorizer,env:prod} by {service}",
+        "series": [
+          {
+            "scope": "env:prod,service:lata-velha-jwt-authorizer",
+            "point": 0.18402540683746338
           }
         ],
         "message": "série encontrada"
@@ -113,7 +189,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 0.0032761875041006534
+            "point": 0.008435388548100171
           }
         ],
         "message": "série encontrada"
@@ -127,7 +203,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 20707420.0
+            "point": 22747861.333333332
           }
         ],
         "message": "série encontrada",
@@ -147,7 +223,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 19488572.0
+            "point": 17166922.666666668
           }
         ],
         "message": "série encontrada",
@@ -167,7 +243,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 28448756.0
+            "point": 28684450.222222224
           }
         ],
         "message": "série encontrada",
@@ -177,6 +253,14 @@
             "point": 86507520.0
           }
         ]
+      }
+    },
+    {
+      "id": "DT-DD-05/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-auth-cpf",
+        "events": 1
       }
     },
     {
@@ -196,11 +280,27 @@
       }
     },
     {
+      "id": "DT-DD-05/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-jwt-authorizer",
+        "events": 1
+      }
+    },
+    {
       "id": "DT-DD-05/lata-velha-os-service",
       "status": "pass",
       "details": {
         "query": "service:lata-velha-os-service",
         "events": 1
+      }
+    },
+    {
+      "id": "DT-DD-06/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-auth-cpf",
+        "spans": 1
       }
     },
     {
@@ -220,6 +320,14 @@
       }
     },
     {
+      "id": "DT-DD-06/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-jwt-authorizer",
+        "spans": 1
+      }
+    },
+    {
       "id": "DT-DD-06/lata-velha-os-service",
       "status": "pass",
       "details": {
@@ -228,21 +336,324 @@
       }
     },
     {
+      "id": "DT-DD-11/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-auth-cpf env:prod",
+        "spans": 10,
+        "versions": [
+          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
+          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
+          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
+          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
+          "75e79fd2182faede17c0e29a5ae88eb137a563ae"
+        ],
+        "message": "version presente"
+      }
+    },
+    {
+      "id": "DT-DD-11/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-billing-service env:prod",
+        "spans": 10,
+        "versions": [
+          "1.1",
+          "2.13.0-alpha",
+          "21.0.11+10-LTS",
+          "222757be0494b640fcb5182b3e975b309b869cba",
+          "2.13.0"
+        ],
+        "message": "version presente"
+      }
+    },
+    {
+      "id": "DT-DD-11/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-inventory-service env:prod",
+        "spans": 10,
+        "versions": [
+          "3.2.5",
+          "21.0.11+10-LTS",
+          "222757be0494b640fcb5182b3e975b309b869cba",
+          "2.13.0",
+          "1.47.0"
+        ],
+        "message": "version presente"
+      }
+    },
+    {
+      "id": "DT-DD-11/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-jwt-authorizer env:prod",
+        "spans": 10,
+        "versions": [
+          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
+          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
+          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
+          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
+          "c60232841b0dc785b8ee959c95f19976f0d5c17d"
+        ],
+        "message": "version presente"
+      }
+    },
+    {
+      "id": "DT-DD-11/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-os-service env:prod",
+        "spans": 10,
+        "versions": [
+          "3.2.5",
+          "21.0.11+10-LTS",
+          "222757be0494b640fcb5182b3e975b309b869cba",
+          "2.13.0",
+          "1.47.0"
+        ],
+        "message": "version presente"
+      }
+    },
+    {
+      "id": "DT-DD-12/lata-velha-auth-cpf",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-auth-cpf",
+        "events": 9,
+        "sample_keys": [
+          "arn",
+          "attributes",
+          "host",
+          "id",
+          "lambda",
+          "message",
+          "request_id",
+          "service",
+          "source",
+          "status",
+          "step",
+          "tags",
+          "timestamp",
+          "type",
+          "version"
+        ],
+        "trace_id": "6af921380000000081515872f3c21d18",
+        "correlated_events": 0,
+        "message": "trace_id presente no log",
+        "sample_messages": [
+          "START RequestId: 16608910-782b-4674-a789-f8722900d525 Version: $LATEST",
+          "auth-cpf invocation",
+          "END RequestId: 16608910-782b-4674-a789-f8722900d525"
+        ]
+      }
+    },
+    {
+      "id": "DT-DD-12/lata-velha-billing-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-billing-service",
+        "events": 77,
+        "sample_keys": [
+          "@timestamp",
+          "arch",
+          "attributes",
+          "command_args",
+          "deployment",
+          "description",
+          "distro",
+          "environment",
+          "executable",
+          "host",
+          "hostname",
+          "id",
+          "instance",
+          "language",
+          "message",
+          "name",
+          "os",
+          "otel",
+          "path",
+          "pid",
+          "process",
+          "runtime",
+          "sdk",
+          "service",
+          "severity_number",
+          "severity_text",
+          "source",
+          "status",
+          "tags",
+          "telemetry",
+          "timestamp",
+          "type",
+          "version"
+        ],
+        "trace_id": "4587915672846480321",
+        "correlated_events": 0,
+        "message": "trace_id presente no log"
+      }
+    },
+    {
+      "id": "DT-DD-12/lata-velha-inventory-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-inventory-service",
+        "events": 61,
+        "sample_keys": [
+          "@timestamp",
+          "arch",
+          "attributes",
+          "code",
+          "command_args",
+          "deployment",
+          "description",
+          "distro",
+          "environment",
+          "exception",
+          "executable",
+          "filepath",
+          "function",
+          "host",
+          "hostname",
+          "id",
+          "instance",
+          "language",
+          "lineno",
+          "message",
+          "name",
+          "namespace",
+          "os",
+          "otel",
+          "path",
+          "pid",
+          "process",
+          "runtime",
+          "sdk",
+          "service",
+          "severity_number",
+          "severity_text",
+          "source",
+          "stacktrace",
+          "status",
+          "tags",
+          "telemetry",
+          "thread",
+          "timestamp",
+          "type",
+          "version"
+        ],
+        "trace_id": "2647870462159896810",
+        "correlated_events": 0,
+        "message": "trace_id presente no log"
+      }
+    },
+    {
+      "id": "DT-DD-12/lata-velha-jwt-authorizer",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-jwt-authorizer",
+        "events": 4,
+        "sample_keys": [
+          "arn",
+          "attributes",
+          "host",
+          "id",
+          "lambda",
+          "message",
+          "request_id",
+          "service",
+          "source",
+          "status",
+          "tags",
+          "timestamp",
+          "type"
+        ],
+        "trace_id": "6af9222e000000001039cc47abea04d6",
+        "correlated_events": 0,
+        "message": "trace_id presente no log"
+      }
+    },
+    {
+      "id": "DT-DD-12/lata-velha-os-service",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-os-service",
+        "events": 66,
+        "sample_keys": [
+          "@timestamp",
+          "arch",
+          "attributes",
+          "code",
+          "command_args",
+          "deployment",
+          "description",
+          "distro",
+          "environment",
+          "executable",
+          "filepath",
+          "function",
+          "host",
+          "hostname",
+          "id",
+          "instance",
+          "language",
+          "lineno",
+          "message",
+          "name",
+          "namespace",
+          "os",
+          "otel",
+          "path",
+          "pid",
+          "process",
+          "runtime",
+          "sdk",
+          "service",
+          "severity_number",
+          "severity_text",
+          "source",
+          "status",
+          "tags",
+          "telemetry",
+          "thread",
+          "timestamp",
+          "type",
+          "version"
+        ],
+        "trace_id": "16265884079814683294",
+        "correlated_events": 0,
+        "message": "trace_id presente no log"
+      }
+    },
+    {
+      "id": "DT-DD-13",
+      "status": "pass",
+      "details": {
+        "query": "trace_id:58619f620e0b3dcfa464cba0245e94e9",
+        "trace_id": "58619f620e0b3dcfa464cba0245e94e9",
+        "spans": 1,
+        "counts": {},
+        "duplicates": [],
+        "message": "sem duplicação"
+      }
+    },
+    {
       "id": "DT-DD-07",
       "status": "pass",
       "details": {
         "title": "Lata Velha — Microsserviços",
-        "dashboards_seen": 3,
-        "id": "ybt-6vw-p2t",
-        "url": "/dashboard/ybt-6vw-p2t/lata-velha--microsservios",
-        "widgets": 11
+        "dashboards_seen": 4,
+        "id": "z66-twc-mdm",
+        "url": "/dashboard/z66-twc-mdm/lata-velha--microsservios",
+        "widgets": 15
       }
     },
     {
       "id": "DT-DD-08",
       "status": "pass",
       "details": {
-        "count": 12,
+        "count": 16,
         "missing": [],
         "alerting": [],
         "states": {
@@ -257,7 +668,11 @@
           "[prod] lata-velha-os-service — erros 5xx > 1%": "OK",
           "[prod] lata-velha-os-service — heap JVM > 85%": "OK",
           "[prod] lata-velha-billing-service — heap JVM > 85%": "OK",
-          "[prod] lata-velha-inventory-service — heap JVM > 85%": "OK"
+          "[prod] lata-velha-inventory-service — heap JVM > 85%": "OK",
+          "[prod] Edge (API Gateway) — 5xx acima de 5 em 5 min": "OK",
+          "[prod] Edge (API Gateway) — latência > 1s": "OK",
+          "[Synthetics] [prod] API pública — health": "OK",
+          "[Synthetics] [prod] API pública — OpenAPI da auth-cpf": "OK"
         }
       }
     },
@@ -269,10 +684,40 @@
       }
     },
     {
+      "id": "DT-DD-14",
+      "status": "pass",
+      "details": {
+        "query": "service:lata-velha-edge source:apigateway",
+        "events": 5,
+        "ip_leak": false,
+        "message": "logs de borda presentes"
+      }
+    },
+    {
+      "id": "DT-DD-15",
+      "status": "pass",
+      "details": {
+        "edge_5xx": true,
+        "edge_latency": true,
+        "message": "monitores de borda presentes"
+      }
+    },
+    {
+      "id": "DT-DD-16",
+      "status": "pass",
+      "details": {
+        "monitors_with_notification": 2,
+        "sample": [
+          "[prod] Edge (API Gateway) — 5xx acima de 5 em 5 min",
+          "[prod] Edge (API Gateway) — latência > 1s"
+        ]
+      }
+    },
+    {
       "id": "DT-DD-10",
       "status": "pass",
       "details": {
-        "url": "https://we5lklh1vk.execute-api.us-east-1.amazonaws.com/actuator/health",
+        "url": "https://k6ateatqnh.execute-api.us-east-1.amazonaws.com/actuator/health",
         "http_status": 200,
         "body": {
           "status": "UP",
@@ -285,7 +730,7 @@
     }
   ],
   "summary": {
-    "passed": 21,
+    "passed": 45,
     "failed": 0,
     "skipped": 1
   }
