@@ -459,9 +459,12 @@ def _extract_trace_id_from_event(event: dict[str, Any]) -> str | None:
 def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, object]], start: datetime, end: datetime) -> list[dict[str, Any]]:
     """DT-DD-12: log com trace_id e pelo menos uma linha correlacionada."""
     checks = []
+    # O os-service gera muito log de startup/infra; a correlação olha só os
+    # últimos 5 min (onde estão as requisições do warmup) e uma amostra maior.
+    recent_start = max(start, end - timedelta(minutes=5))
     for service in services:
         base_query = f"service:{service}"
-        base_payload = client.search_logs(base_query, start, end, limit=100)
+        base_payload = client.search_logs(base_query, recent_start, end, limit=200)
         base_events = base_payload.get("data", []) or []
 
         trace_id = next(
@@ -474,7 +477,7 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
             # o fallback por texto cobre logs Lambda cujo trace_id está no JSON
             # da mensagem.
             for query in (f"@trace_id:{trace_id}", f'service:{service} "{trace_id}"'):
-                result = client.search_logs(query, start, end, limit=5)
+                result = client.search_logs(query, recent_start, end, limit=5)
                 correlated = len(result.get("data", []) or [])
                 if correlated:
                     break
