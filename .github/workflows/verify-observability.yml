@@ -21,6 +21,14 @@ on:
         description: "Segundos de espera antes da primeira consulta"
         type: string
         default: "30"
+  # Enquanto o workflow não está na default branch, o workflow_dispatch
+  # retorna 404. O gatilho abaixo permite validá-lo na feature branch sem
+  # rodar a cada push (só quando o próprio workflow/script muda).
+  push:
+    branches: [feature/observability]
+    paths:
+      - ".github/workflows/verify-observability.yml"
+      - "scripts/verify_datadog.py"
 
 permissions:
   contents: read
