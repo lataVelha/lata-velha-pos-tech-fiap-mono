@@ -15,12 +15,12 @@ ausência de duplicação. Executar em staging antes do go-live.
 
 | # | Verificação | Como | OK |
 |---|---|---|---|
-| 1 | Três serviços distintos no APM | Datadog → APM → Services (`env:prod`) | [ ] |
-| 2 | `service.name` correto por trace | abrir trace e conferir a tag | [ ] |
-| 3 | Logs correlacionados por `trace_id` | filtro `@trace_id:<id>` | [ ] |
-| 4 | Sem spans duplicados | 1 span HTTP por request | [ ] |
+| 1 | Três serviços distintos no APM | Datadog → APM → Services (`env:prod`) | [x] |
+| 2 | `service.name` correto por trace | abrir trace e conferir a tag | [x] |
+| 3 | Logs correlacionados por `trace_id` | filtro `@trace_id:<id>` | [x] |
+| 4 | Sem spans duplicados | 1 span HTTP por request | [x] |
 | 5 | 5xx com `status=ERROR` + log | forçar erro e inspecionar | [ ] |
-| 6 | Service map com arestas esperadas | APM → Service Map e `DT-DD-22` (`GET /api/v1/service_dependencies`) | [ ] |
+| 6 | Service map com arestas esperadas | APM → Service Map e `DT-DD-22` (`GET /api/v1/service_dependencies`) | [x] |
 | 7 | Admission Controller não injeta Java Agent | `kubectl get pod -o yaml | grep JAVA_TOOL_OPTIONS` | [ ] |
 | 8 | `clusterName=lata-velha-prod` nas métricas do Agent | Datadog → Infrastructure | [ ] |
 
@@ -44,6 +44,15 @@ done
 
 ## Resultado
 
+- [x] **2026-11-16 — validação pós-correlação SQS:** `verify-observability.yml` run
+  [`43916144535`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43916144535)
+  — **50 pass / 0 fail / 2 skip**. `DT-DD-22` pass com `missing={}` (arestas
+  os→billing, billing→os, billing→inventory, os→inventory, inventory→os) e
+  `DT-DD-12` pass (logs correlacionados). Skips: `DT-DD-09` (integração AWS
+  desabilitada no Academy) e `DT-DD-18` (alarme CloudWatch não forçado).
+  Fluxo gerado: OS 3 (diagnóstico → `DiagnosticoFinalizado`), aprovação
+  (`OrcamentoAprovado`, via port-forward direto no billing) e execução
+  (`ServiceEnded`/`OSEnded`/`CobrancaEmitida`).
 - [x] Produção validada — 2026-11-14 (relatório `datadog-observability-report.json`).
 - [x] Sem referência ao serviço removido `lata-velha-api` na stack gerenciada.
 - [x] Evidência detalhada (hits, p95, JVM, logs, spans, dashboard e monitores):

@@ -513,22 +513,31 @@ Implementação feita **sem merge para master**:
 |---|---|
 | Shared-kernel (P0) | commit `873215c`; `messageAttributeNames("All")` + `messageSystemAttributeNames` + `OpenTelemetry` injetado |
 | os/inventory/billing | commits `1c55ce8` / `6597484` / `4fa7125` (bump do shared-kernel + `opentelemetry-sdk-testing`) |
-| Infra (P1) | commits `908e75d` (env do Agent), `a7626c6` (timeout 900s) e `229f3f1` (revert do env — o upgrade travou o DaemonSet) |
-| Mono (gate/docs) | commits `efa9f82`, `a82894b`, `15ae419` (`DT-DD-22`, `DT-DD-12` com skip e candidatos de query) |
+| Infra (P1) | commits `908e75d` (env do Agent), `a7626c6` (timeout 900s), `229f3f1` (revert temporário) e `f9e28b9` (restore após recuperar o cluster) |
+| Mono (gate/docs) | commits `efa9f82`, `a82894b`, `15ae419`, `4cf2c44`, `47072fc`, `739ca5d` (`DT-DD-22`, `DT-DD-12`, bypass de S3 e diagnóstico de spans) |
 | Testes locais | os: 807 testes / 0 falhas; inventory: 254 / 0; billing: 125 / 0; LocalStack IT: 4 / 0; E2E: 28 / 0 |
 | CI (PR) | validação verde (Terraform, Maven, pytest, scripts) |
-| CD | os/inventory/billing deployados; addons falhou no Helm release do Agent por timeout de 5m; o timeout foi para 15m, mas o DaemonSet não ficou ready e o env do P1 foi revertido (`229f3f1`) |
-| Datadog depois do deploy | sem spans/JVM/logs dos serviços EKS: o Agent não estava recebendo OTLP; os endpoints da API respondiam 500/502. `DT-DD-22` continuou fail |
+| CD | os/inventory/billing deployados; addons falhou no Helm release do Agent por timeout de 5m. O cluster tinha 4/5 nodes NotReady e `aws-node`/`kube-proxy` em ImagePullBackOff; o node group foi reduzido para `desiredSize=2`, os nodes novos subiram com CNI saudável e o Agent ficou 3/3 Running |
+| Datadog depois do deploy | **`DT-DD-22` PASS** (run `43916144535`, 50 pass / 0 fail / 2 skip): todas as arestas esperadas apareceram; `DT-DD-12` pass (logs correlacionados) |
 
-> O `DT-DD-22` foi consultado ao vivo via `GET /api/v1/service_dependencies?env=prod` e retornou
-> os três serviços + o API Gateway, **sem nenhuma chamada entre eles** — o RED que motivou a correção.
+> O RED inicial foi consultado ao vivo via `GET /api/v1/service_dependencies?env=prod`:
+> os três serviços + API Gateway, **sem nenhuma chamada entre eles**.
+>
+> Para gerar o fluxo completo, foi criada a OS 3 (diagnóstico → `DiagnosticoFinalizado`),
+> aprovada via `port-forward` direto no billing (`POST /orcamentos/3/aprovar` → 204) e
+> executada (`ServiceEnded`/`OSEnded`). O `SqsEventPublisher` publicou e os listeners
+> consumiram; as arestas `os → billing`, `billing → os`, `billing → inventory`,
+> `os → inventory` e `inventory → os` apareceram no `service_dependencies`.
+>
+> O approve via API Gateway retornou **404** (rota de borda desatualizada), por isso o
+> `port-forward` direto foi usado no fluxo de validação. O `GET` público continua 200.
 
 ### 13.1 Pendências após esta execução
 
-- [x] Reverter o `values` do Agent (commit `229f3f1`) para restaurar o DaemonSet; o P1 (inferred services) fica pendente.
-- [ ] Com credenciais AWS válidas, aplicar o addons revertido (ou `helm rollback datadog 1 -n datadog`) e confirmar `kubectl -n datadog rollout status ds/datadog-agent`.
-- [ ] Reaplicar o P1 em duas etapas: primeiro só `DD_APM_COMPUTE_STATS_BY_SPAN_KIND` + `DD_APM_PEER_TAGS_AGGREGATION`, validar o rollout; depois `DD_APM_PEER_TAGS`, validar de novo. Ou atualizar o chart para Agent ≥7.60, onde os defaults já bastam.
-- [ ] Rodar `verify-observability.yml` com `api_url` informado (bypass do S3 quando as credenciais do Academy expiram) e confirmar `DT-DD-22` GREEN.
-- [ ] Investigar os 500/502 dos serviços EKS após o deploy (health 200 no cluster, mas API Gateway 500/502) antes de gerar tráfego de negócio.
-- [ ] Investigar por que `@trace_id:<id>` não fecha com o `trace_id` decimal dos logs OTLP; o check já tenta decimal/hex, `trace_id` e `@dd.trace_id`.
-- [ ] `DT-DD-18` (evento CloudWatch) continua falhando por limitação do AWS Academy (sem integração AWS nativa).
+- [x] Recuperar o cluster (node group com CNI quebrado) e restaurar o Agent 3/3 com os peer tags (`f9e28b9`).
+- [x] Confirmar `DT-DD-22` GREEN com tráfego de saga real.
+- [x] Confirmar `DT-DD-12` GREEN (logs correlacionados).
+- [ ] Corrigir a rota de borda `POST /billing/orcamentos/{id}/aprovar` (API Gateway 404; direto no serviço 204) e rodar o `deploy-edge`/CD completo.
+- [ ] Decidir o tamanho final do node group (ficou `desiredSize=2`, antes 5/7) e reconciliar com o Terraform.
+- [ ] Rodar o CD completo com credenciais AWS válidas (addons + observability + edge + verify) para fechar o pipeline sem bypass de `api_url`.
+- [ ] `DT-DD-18` (evento CloudWatch) continua skip/fail por limitação do AWS Academy (sem integração AWS nativa).
