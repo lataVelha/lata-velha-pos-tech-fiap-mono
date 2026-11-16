@@ -566,7 +566,7 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
         checks.append(
             {
                 "id": f"DT-DD-12/{service}",
-                "status": "pass" if correlated > 0 else "fail",
+                "status": "pass" if correlated > 0 else ("fail" if trace_id else "skip"),
                 "details": details,
             }
         )

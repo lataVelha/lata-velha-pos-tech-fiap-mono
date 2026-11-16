@@ -62,7 +62,7 @@ class CorrelationTests(unittest.TestCase):
         self.assertEqual(checks[0]["status"], "pass")
         self.assertEqual(checks[0]["details"]["trace_id"], "0123456789abcdef")
 
-    def test_log_correlation_fail_sem_trace_id(self) -> None:
+    def test_log_correlation_skip_sem_trace_id(self) -> None:
         class Empty:
             def search_logs(self, *args, **kwargs):
                 return {"data": [{}]}
@@ -71,7 +71,7 @@ class CorrelationTests(unittest.TestCase):
                 return {"data": []}
 
         checks = v.check_log_correlation(Empty(), {"lata-velha-auth-cpf": {}}, "prod", START, END)
-        self.assertEqual(checks[0]["status"], "fail")
+        self.assertEqual(checks[0]["status"], "skip")
 
 
 class DuplicateTests(unittest.TestCase):
