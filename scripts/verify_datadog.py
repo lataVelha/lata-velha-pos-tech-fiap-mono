@@ -209,10 +209,18 @@ class DatadogClient:
         params = {"q": query, "from": int(start.timestamp())}
         return _request("GET", f"{self.api_url}/api/v1/metrics?{urllib.parse.urlencode(params)}", self.headers)
 
-    def list_events(self, start: datetime, end: datetime, tags: str | None = None) -> dict[str, Any]:
+    def list_events(
+        self,
+        start: datetime,
+        end: datetime,
+        tags: str | None = None,
+        sources: str | None = None,
+    ) -> dict[str, Any]:
         params = {"start": int(start.timestamp()), "end": int(end.timestamp())}
         if tags:
             params["tags"] = tags
+        if sources:
+            params["sources"] = sources
         return _request("GET", f"{self.api_url}/api/v1/events?{urllib.parse.urlencode(params)}", self.headers)
 
     def list_synthetics_tests(self) -> dict[str, Any]:
@@ -686,6 +694,29 @@ def check_trace_metric_names(client: DatadogClient, start: datetime) -> dict[str
     }
 
 
+def check_trace_metric_candidates(client: DatadogClient, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-21 (diagnóstico): testa nomes candidatos de trace metric."""
+    candidates = {
+        "http.request/os": "sum:trace.http.request.hits{service:lata-velha-os-service,env:prod}",
+        "http.server.request/os": "sum:trace.http.server.request.hits{service:lata-velha-os-service,env:prod}",
+        "spring_old/os": "sum:trace.org.springframework.boot.server.hits{service:lata-velha-os-service,env:prod}",
+        "spring_old/billing": "sum:trace.io.opentelemetry.spring_webmvc_6.0.server.hits{service:lata-velha-billing-service,env:prod}",
+        "lambda/auth-cpf": "sum:trace.aws.lambda.hits{service:lata-velha-auth-cpf,env:prod}",
+    }
+    results: dict[str, Any] = {}
+    for label, query in candidates.items():
+        payload = client.query_metric(query, start, end)
+        series = series_latest(payload)
+        points = [item["point"] for item in series if item["point"] is not None]
+        results[label] = {"series": len(series), "points": points[:3], "query": query}
+    found = [label for label, value in results.items() if value["series"]]
+    return {
+        "id": "DT-DD-21",
+        "status": "pass" if found else "fail",
+        "details": {"found": found, "candidates": results},
+    }
+
+
 def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start: datetime, end: datetime) -> dict[str, Any]:
     """DT-DD-18: evento de alarme CloudWatch chegou ao Datadog (Story 20.3)."""
     if not alarm_name:
@@ -694,19 +725,50 @@ def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start:
             "status": "skip",
             "details": {"reason": "nenhum alarme CloudWatch foi forçado nesta execução"},
         }
-    payload = client.list_events(start, end, tags="source:cloudwatch")
-    events = payload.get("events", []) or []
+    buckets: dict[str, Any] = {}
+    all_events: list[dict[str, Any]] = []
+    for label, kwargs in (
+        ("tags", {"tags": "source:cloudwatch"}),
+        ("sources_amazon", {"sources": "amazon cloudwatch"}),
+        ("sources_cloudwatch", {"sources": "cloudwatch"}),
+    ):
+        try:
+            payload = client.list_events(start, end, **kwargs)
+        except DatadogError as error:
+            buckets[label] = f"erro: {error}"
+            continue
+        events = payload.get("events", []) or []
+        buckets[label] = len(events)
+        all_events.extend(events)
+
+    # deduplica por id/título para não contar o mesmo evento em 2 queries
+    unique: dict[str, dict[str, Any]] = {}
+    for event in all_events:
+        key = str(event.get("id") or event.get("title") or event.get("date_happened"))
+        unique[key] = event
+    events = list(unique.values())
     matches = [
         event for event in events
         if alarm_name in str(event.get("title", "")) or alarm_name in str(event.get("text", ""))
+    ]
+    sample = [
+        {
+            "title": event.get("title"),
+            "tags": event.get("tags"),
+            "source_type_name": event.get("source_type_name"),
+            "date_happened": event.get("date_happened"),
+        }
+        for event in events[:10]
     ]
     return {
         "id": "DT-DD-18",
         "status": "pass" if matches else "fail",
         "details": {
             "alarm": alarm_name,
+            "buckets": buckets,
             "events": len(events),
             "matches": len(matches),
+            "sample": sample,
             "message": "evento CloudWatch chegou ao Datadog" if matches else "evento CloudWatch não encontrado",
         },
     }
@@ -927,6 +989,7 @@ def main(argv: list[str] | None = None) -> int:
         checks.append(check_alert_routing(client))
         checks.append(check_business_attributes(client, start, end))
         checks.append(check_trace_metric_names(client, start))
+        checks.append(check_trace_metric_candidates(client, start, end))
         checks.append(check_cloudwatch_event(client, args.cloudwatch_event, start, end))
         checks.append(check_health(args.api_url))
         if args.synthetic_wait:

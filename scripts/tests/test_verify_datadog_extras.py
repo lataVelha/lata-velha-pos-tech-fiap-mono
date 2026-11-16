@@ -28,7 +28,7 @@ class EventClient:
     def __init__(self, match: bool):
         self.match = match
 
-    def list_events(self, start, end, tags=None):
+    def list_events(self, start, end, tags=None, sources=None):
         title = "CloudWatch alarm lata-velha-os-service-events-dlq-messages" if self.match else "outro alarme"
         return {"events": [{"title": title, "text": ""}]}
 
@@ -69,6 +69,24 @@ class CloudwatchEventTests(unittest.TestCase):
     def test_fail_sem_evento(self) -> None:
         check = v.check_cloudwatch_event(EventClient(False), "lata-velha-os-service-events-dlq-messages", START, END)
         self.assertEqual(check["status"], "fail")
+
+
+class CandidateClient:
+    def __init__(self, hit: bool):
+        self.hit = hit
+
+    def query_metric(self, query, start, end):
+        if self.hit and "trace.aws.lambda" in query:
+            return {"series": [{"scope": "x", "pointlist": [[1, 1.0]]}]}
+        return {"series": []}
+
+
+class CandidateMetricTests(unittest.TestCase):
+    def test_pass_com_candidato(self) -> None:
+        self.assertEqual(v.check_trace_metric_candidates(CandidateClient(True), START, END)["status"], "pass")
+
+    def test_fail_sem_candidato(self) -> None:
+        self.assertEqual(v.check_trace_metric_candidates(CandidateClient(False), START, END)["status"], "fail")
 
 
 class SyntheticTests(unittest.TestCase):

@@ -567,14 +567,6 @@ jobs:
             echo "DD_TEST_ALARM_NAME=" >> "$GITHUB_ENV"
             exit 0
           fi
-          # Evento sintético garante que o teste não dependa do agendamento
-          # interno do CloudWatch para publicar o state change.
-          EVENT_FILE=$(mktemp)
-          cat > "$EVENT_FILE" <<JSON
-          [{"Source":"aws.cloudwatch","DetailType":"CloudWatch Alarm State Change","Detail":"{\"alarmName\":\"${ALARM}\",\"state\":{\"value\":\"ALARM\",\"reason\":\"lata-velha 20.3 test\"}}"}]
-          JSON
-          aws events put-events --entries file://"$EVENT_FILE" || true
-          rm -f "$EVENT_FILE"
           sleep 25
           FAILED=$(aws cloudwatch get-metric-statistics \
             --namespace AWS/Events \
