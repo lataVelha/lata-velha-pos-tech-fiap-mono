@@ -1,10 +1,10 @@
 # Runbook — observabilidade (Datadog + OpenTelemetry)
 
-> **Estado em 2026-11-15:** 19.1–19.5 implementados no branch
-> `feature/observability`; o deploy final está bloqueado por credenciais AWS
-> Academy canceladas. As queries abaixo descrevem o alvo **após o deploy**
-> (`http.request` no span, `messaging.*` e o mapa de trace metrics); a última validação
-> live é o run 43670113903.
+> **Estado em 2026-11-16:** validado no run **43797428512** — **50 pass /
+> 0 fail / 1 skip (SQS)**. O 20.3 usa o forwarder Lambda + Event Management
+> v2; o 19.2 foi validado no os-service. O span HTTP server é `http.request`;
+> as trace metrics continuam mapeadas pelo escopo da instrumentação
+> (`trace_metric_prefixes`).
 
 Stories 18.4, 21.1, 21.2, 21.4 e 21.5. Serviços cobertos:
 `lata-velha-os-service`, `lata-velha-inventory-service`,

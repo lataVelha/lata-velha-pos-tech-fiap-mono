@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-15T03:08:36Z",
+  "timestamp": "2026-11-16T03:42:51Z",
   "env": "prod",
   "window": "2:00:00",
   "services": [
@@ -32,7 +32,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 17.0
+            "point": 9.333333333333334
           }
         ],
         "message": "série encontrada"
@@ -46,7 +46,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 19.166666666666668
+            "point": 14.333333333333332
           }
         ],
         "message": "série encontrada"
@@ -74,7 +74,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 19.0
+            "point": 21.833333333333336
           }
         ],
         "message": "série encontrada"
@@ -133,7 +133,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-auth-cpf",
-            "point": 1.1133556365966797
+            "point": 0.00014585180906578898
           }
         ],
         "message": "série encontrada"
@@ -147,7 +147,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 0.006789499090685983
+            "point": 0.007336765661247979
           }
         ],
         "message": "série encontrada"
@@ -161,7 +161,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 0.013020864100417619
+            "point": 0.010319034543578326
           }
         ],
         "message": "série encontrada"
@@ -175,7 +175,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-jwt-authorizer",
-            "point": 0.18402540683746338
+            "point": 0.18038134276866913
           }
         ],
         "message": "série encontrada"
@@ -189,7 +189,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 0.008435388548100171
+            "point": 0.012049607286311163
           }
         ],
         "message": "série encontrada"
@@ -203,7 +203,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-billing-service",
-            "point": 22747861.333333332
+            "point": 19491601.333333332
           }
         ],
         "message": "série encontrada",
@@ -223,7 +223,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-inventory-service",
-            "point": 17166922.666666668
+            "point": 17867088.0
           }
         ],
         "message": "série encontrada",
@@ -243,7 +243,7 @@
         "series": [
           {
             "scope": "env:prod,service:lata-velha-os-service",
-            "point": 28684450.222222224
+            "point": 27063806.0
           }
         ],
         "message": "série encontrada",
@@ -342,11 +342,11 @@
         "query": "service:lata-velha-auth-cpf env:prod",
         "spans": 10,
         "versions": [
-          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
-          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
-          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
-          "75e79fd2182faede17c0e29a5ae88eb137a563ae",
-          "75e79fd2182faede17c0e29a5ae88eb137a563ae"
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c"
         ],
         "message": "version presente"
       }
@@ -361,7 +361,7 @@
           "1.1",
           "2.13.0-alpha",
           "21.0.11+10-LTS",
-          "222757be0494b640fcb5182b3e975b309b869cba",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
           "2.13.0"
         ],
         "message": "version presente"
@@ -376,7 +376,7 @@
         "versions": [
           "3.2.5",
           "21.0.11+10-LTS",
-          "222757be0494b640fcb5182b3e975b309b869cba",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
           "2.13.0",
           "1.47.0"
         ],
@@ -390,11 +390,11 @@
         "query": "service:lata-velha-jwt-authorizer env:prod",
         "spans": 10,
         "versions": [
-          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
-          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
-          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
-          "c60232841b0dc785b8ee959c95f19976f0d5c17d",
-          "c60232841b0dc785b8ee959c95f19976f0d5c17d"
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c"
         ],
         "message": "version presente"
       }
@@ -408,7 +408,7 @@
         "versions": [
           "3.2.5",
           "21.0.11+10-LTS",
-          "222757be0494b640fcb5182b3e975b309b869cba",
+          "fccd24674c4b0391d318622e5ffb99064e28be9c",
           "2.13.0",
           "1.47.0"
         ],
@@ -420,7 +420,7 @@
       "status": "pass",
       "details": {
         "query": "service:lata-velha-auth-cpf",
-        "events": 9,
+        "events": 8,
         "sample_keys": [
           "arn",
           "attributes",
@@ -432,19 +432,17 @@
           "service",
           "source",
           "status",
-          "step",
           "tags",
           "timestamp",
-          "type",
-          "version"
+          "type"
         ],
-        "trace_id": "6af921380000000081515872f3c21d18",
+        "trace_id": "6afa795e000000001e5c5993a26a0877",
         "correlated_events": 0,
         "message": "trace_id presente no log",
         "sample_messages": [
-          "START RequestId: 16608910-782b-4674-a789-f8722900d525 Version: $LATEST",
-          "auth-cpf invocation",
-          "END RequestId: 16608910-782b-4674-a789-f8722900d525"
+          "INIT_START Runtime Version: python:3.12.mainlinev2.v86 Runtime Version ARN: arn:aws:lambda:us-east-1::runtime:9d15a516fef11563a8c452bd8d3fe5a5a120b73013e74783e925235557467534",
+          "START RequestId: 6fef949d-b57f-4ed9-be03-09a68208cf14 Version: $LATEST",
+          "auth-cpf invocation"
         ]
       }
     },
@@ -453,7 +451,7 @@
       "status": "pass",
       "details": {
         "query": "service:lata-velha-billing-service",
-        "events": 77,
+        "events": 1,
         "sample_keys": [
           "@timestamp",
           "arch",
@@ -482,14 +480,17 @@
           "severity_number",
           "severity_text",
           "source",
+          "span_id",
           "status",
           "tags",
           "telemetry",
           "timestamp",
+          "trace_flags",
+          "trace_id",
           "type",
           "version"
         ],
-        "trace_id": "4587915672846480321",
+        "trace_id": "5427359668745413542",
         "correlated_events": 0,
         "message": "trace_id presente no log"
       }
@@ -499,7 +500,7 @@
       "status": "pass",
       "details": {
         "query": "service:lata-velha-inventory-service",
-        "events": 61,
+        "events": 29,
         "sample_keys": [
           "@timestamp",
           "arch",
@@ -510,7 +511,6 @@
           "description",
           "distro",
           "environment",
-          "exception",
           "executable",
           "filepath",
           "function",
@@ -534,7 +534,6 @@
           "severity_number",
           "severity_text",
           "source",
-          "stacktrace",
           "status",
           "tags",
           "telemetry",
@@ -543,7 +542,7 @@
           "type",
           "version"
         ],
-        "trace_id": "2647870462159896810",
+        "trace_id": "17638297132893783776",
         "correlated_events": 0,
         "message": "trace_id presente no log"
       }
@@ -569,7 +568,7 @@
           "timestamp",
           "type"
         ],
-        "trace_id": "6af9222e000000001039cc47abea04d6",
+        "trace_id": "6afa796100000000b3112a2f2cf9eb41",
         "correlated_events": 0,
         "message": "trace_id presente no log"
       }
@@ -579,7 +578,7 @@
       "status": "pass",
       "details": {
         "query": "service:lata-velha-os-service",
-        "events": 66,
+        "events": 100,
         "sample_keys": [
           "@timestamp",
           "arch",
@@ -621,7 +620,7 @@
           "type",
           "version"
         ],
-        "trace_id": "16265884079814683294",
+        "trace_id": "8861544094700730004",
         "correlated_events": 0,
         "message": "trace_id presente no log"
       }
@@ -630,8 +629,8 @@
       "id": "DT-DD-13",
       "status": "pass",
       "details": {
-        "query": "trace_id:58619f620e0b3dcfa464cba0245e94e9",
-        "trace_id": "58619f620e0b3dcfa464cba0245e94e9",
+        "query": "trace_id:9ede44eab211de8ee648a81bb127e198",
+        "trace_id": "9ede44eab211de8ee648a81bb127e198",
         "spans": 1,
         "counts": {},
         "duplicates": [],
@@ -644,8 +643,8 @@
       "details": {
         "title": "Lata Velha — Microsserviços",
         "dashboards_seen": 4,
-        "id": "z66-twc-mdm",
-        "url": "/dashboard/z66-twc-mdm/lata-velha--microsservios",
+        "id": "ybt-6vw-p2t",
+        "url": "/dashboard/ybt-6vw-p2t/lata-velha--microsservios",
         "widgets": 15
       }
     },
@@ -653,7 +652,7 @@
       "id": "DT-DD-08",
       "status": "pass",
       "details": {
-        "count": 16,
+        "count": 18,
         "missing": [],
         "alerting": [],
         "states": {
@@ -714,10 +713,285 @@
       }
     },
     {
+      "id": "DT-DD-17",
+      "status": "pass",
+      "details": {
+        "checks": [
+          {
+            "service": "lata-velha-os-service",
+            "attribute": "ordem_servico.id",
+            "spans": 5,
+            "status": "pass"
+          },
+          {
+            "service": "lata-velha-billing-service",
+            "attribute": "ordem_servico.id",
+            "spans": 0,
+            "status": "fail"
+          },
+          {
+            "service": "lata-velha-inventory-service",
+            "attribute": "peca.id",
+            "spans": 0,
+            "status": "fail"
+          }
+        ],
+        "message": "atributos de negócio presentes"
+      }
+    },
+    {
+      "id": "DT-DD-20",
+      "status": "pass",
+      "details_note": "diagnóstico; a decisão de métrica é do DT-DD-01/03",
+      "details": {
+        "http_request": false,
+        "old_names": false,
+        "metrics": [],
+        "message": "trace metric mapeada pelo escopo da instrumentação"
+      }
+    },
+    {
+      "id": "DT-DD-21",
+      "status": "pass",
+      "details": {
+        "found": [
+          "spring_old/os",
+          "spring_old/billing",
+          "lambda/auth-cpf"
+        ],
+        "candidates": {
+          "http.request/os": {
+            "series": 0,
+            "points": [],
+            "query": "sum:trace.http.request.hits{service:lata-velha-os-service,env:prod}"
+          },
+          "http.server.request/os": {
+            "series": 0,
+            "points": [],
+            "query": "sum:trace.http.server.request.hits{service:lata-velha-os-service,env:prod}"
+          },
+          "spring_old/os": {
+            "series": 1,
+            "points": [
+              21.833333333333336
+            ],
+            "query": "sum:trace.org.springframework.boot.server.hits{service:lata-velha-os-service,env:prod}"
+          },
+          "spring_old/billing": {
+            "series": 1,
+            "points": [
+              9.333333333333334
+            ],
+            "query": "sum:trace.io.opentelemetry.spring_webmvc_6.0.server.hits{service:lata-velha-billing-service,env:prod}"
+          },
+          "lambda/auth-cpf": {
+            "series": 1,
+            "points": [
+              2.0
+            ],
+            "query": "sum:trace.aws.lambda.hits{service:lata-velha-auth-cpf,env:prod}"
+          }
+        }
+      }
+    },
+    {
+      "id": "DT-DD-18",
+      "status": "pass",
+      "details": {
+        "alarm": "lata-velha-billing-service-events-dlq-messages",
+        "buckets": {
+          "v2": 1,
+          "tags": 1,
+          "sources_amazon": 0,
+          "sources_cloudwatch": 1,
+          "unfiltered": 298
+        },
+        "events": 299,
+        "matches": 1,
+        "sample": [
+          {
+            "title": null,
+            "tags": [
+              "alarm:lata-velha-billing-service-events-dlq-messages",
+              "env:prod",
+              "source.0:cloudwatch",
+              "source.1:my_apps",
+              "source:cloudwatch",
+              "source:my_apps"
+            ],
+            "source_type_name": null,
+            "date_happened": "2026-11-16T03:32:57.975Z"
+          },
+          {
+            "title": "CloudWatch alarm lata-velha-billing-service-events-dlq-messages",
+            "tags": [
+              "alarm:lata-velha-billing-service-events-dlq-messages",
+              "env:prod",
+              "source:cloudwatch",
+              "source:my_apps"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799977
+          },
+          {
+            "title": "New APM Deployment Version: dbc64ce741d3cfde9faa60347cd4cb398666f0ab",
+            "tags": [
+              "env:prod",
+              "previous_version:888075a68ae0da7efbe20180596c3151dcc7b778",
+              "service:lata-velha-jwt-authorizer",
+              "source:change_tracking",
+              "version:dbc64ce741d3cfde9faa60347cd4cb398666f0ab"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799970
+          },
+          {
+            "title": "New APM Deployment Version: dbc64ce741d3cfde9faa60347cd4cb398666f0ab",
+            "tags": [
+              "env:prod",
+              "previous_version:888075a68ae0da7efbe20180596c3151dcc7b778",
+              "service:we5lklh1vk.execute-api.us-east-1.amazonaws.com",
+              "source:change_tracking",
+              "version:dbc64ce741d3cfde9faa60347cd4cb398666f0ab"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799968
+          },
+          {
+            "title": "New APM Deployment Version: dbc64ce741d3cfde9faa60347cd4cb398666f0ab",
+            "tags": [
+              "env:prod",
+              "previous_version:888075a68ae0da7efbe20180596c3151dcc7b778",
+              "service:lata-velha-auth-cpf",
+              "source:change_tracking",
+              "version:dbc64ce741d3cfde9faa60347cd4cb398666f0ab"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799968
+          },
+          {
+            "title": "Event on containers from Containerd",
+            "tags": [
+              "cluster_name:lata-velha-prod",
+              "container_id:514e94e4556abf0a7564c6ef8b9d229f190636bda2d053868b9fabf61a5225aa",
+              "container_name:api",
+              "display_container_name:api_lata-velha-os-74b8b649bd-t9827",
+              "event_type:destroy",
+              "image_id:487753233051.dkr.ecr.us-east-1.amazonaws.com/lata-velha-os-service_sha256:1c3baf7d7a502509b790cd8c53ea3658b4d04d5d1f330ea597afcd3a2c8550fa",
+              "image_name:487753233051.dkr.ecr.us-east-1.amazonaws.com/lata-velha-os-service",
+              "image_tag:888075a68ae0da7efbe20180596c3151dcc7b778",
+              "kube_cluster_name:lata-velha-prod",
+              "kube_container_name:api",
+              "kube_deployment:lata-velha-os",
+              "kube_namespace:lata-velha-os",
+              "kube_node:i-0cde277f3decd2c18",
+              "kube_ownerref_kind:replicaset",
+              "kube_ownerref_name:lata-velha-os-74b8b649bd",
+              "kube_qos:burstable",
+              "kube_replica_set:lata-velha-os-74b8b649bd",
+              "kube_service:lata-velha-os",
+              "pod_name:lata-velha-os-74b8b649bd-t9827",
+              "pod_phase:running",
+              "short_image:lata-velha-os-service",
+              "source:containerd"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799846
+          },
+          {
+            "title": "Service  kubernetes deployment updated",
+            "tags": [
+              "admission.datadoghq.com/enabled:false",
+              "app:lata-velha-os",
+              "identified_changes:5",
+              "kube_cluster:lata-velha-prod",
+              "kube_condition_available:true",
+              "kube_condition_progressing:true",
+              "kube_deployment:lata-velha-os",
+              "kube_namespace:lata-velha-os",
+              "kube_replica_set:lata-velha-os-757cbd45b",
+              "source:change_tracking"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799804
+          },
+          {
+            "title": "Event on tasks from Containerd",
+            "tags": [
+              "cluster_name:lata-velha-prod",
+              "container_id:514e94e4556abf0a7564c6ef8b9d229f190636bda2d053868b9fabf61a5225aa",
+              "container_name:api",
+              "display_container_name:api_lata-velha-os-74b8b649bd-t9827",
+              "event_type:destroy",
+              "image_id:487753233051.dkr.ecr.us-east-1.amazonaws.com/lata-velha-os-service_sha256:1c3baf7d7a502509b790cd8c53ea3658b4d04d5d1f330ea597afcd3a2c8550fa",
+              "image_name:487753233051.dkr.ecr.us-east-1.amazonaws.com/lata-velha-os-service",
+              "image_tag:888075a68ae0da7efbe20180596c3151dcc7b778",
+              "kube_cluster_name:lata-velha-prod",
+              "kube_container_name:api",
+              "kube_deployment:lata-velha-os",
+              "kube_namespace:lata-velha-os",
+              "kube_node:i-0cde277f3decd2c18",
+              "kube_ownerref_kind:replicaset",
+              "kube_ownerref_name:lata-velha-os-74b8b649bd",
+              "kube_qos:burstable",
+              "kube_replica_set:lata-velha-os-74b8b649bd",
+              "kube_service:lata-velha-os",
+              "pod_name:lata-velha-os-74b8b649bd-t9827",
+              "pod_phase:running",
+              "short_image:lata-velha-os-service",
+              "source:containerd"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799794
+          },
+          {
+            "title": "Events from the Pod lata-velha-os/lata-velha-os-74b8b649bd-t9827",
+            "tags": [
+              "cluster_name:lata-velha-prod",
+              "host_provider_id:i-0cde277f3decd2c18",
+              "kube_cluster_name:lata-velha-prod",
+              "kube_kind:pod",
+              "kube_name:lata-velha-os-74b8b649bd-t9827",
+              "kube_namespace:lata-velha-os",
+              "kube_node:i-0cde277f3decd2c18",
+              "kubernetes_kind:pod",
+              "name:lata-velha-os-74b8b649bd-t9827",
+              "namespace:lata-velha-os",
+              "pod_name:lata-velha-os-74b8b649bd-t9827",
+              "source:kubernetes",
+              "source_component:kubelet"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799791
+          },
+          {
+            "title": "Events from the Deployment lata-velha-os/lata-velha-os",
+            "tags": [
+              "cluster_name:lata-velha-prod",
+              "kube_cluster_name:lata-velha-prod",
+              "kube_deployment:lata-velha-os",
+              "kube_kind:deployment",
+              "kube_name:lata-velha-os",
+              "kube_namespace:lata-velha-os",
+              "kube_node:i-0c15e580104e1a2c9",
+              "kubernetes_kind:deployment",
+              "name:lata-velha-os",
+              "namespace:lata-velha-os",
+              "source:kubernetes",
+              "source_component:deployment-controller"
+            ],
+            "source_type_name": null,
+            "date_happened": 1794799784
+          }
+        ],
+        "message": "evento CloudWatch chegou ao Datadog"
+      }
+    },
+    {
       "id": "DT-DD-10",
       "status": "pass",
       "details": {
-        "url": "https://k6ateatqnh.execute-api.us-east-1.amazonaws.com/actuator/health",
+        "url": "https://we5lklh1vk.execute-api.us-east-1.amazonaws.com/actuator/health",
         "http_status": 200,
         "body": {
           "status": "UP",
@@ -727,10 +1001,47 @@
           ]
         }
       }
+    },
+    {
+      "id": "DT-DD-19",
+      "status": "pass",
+      "details": {
+        "tests": [
+          {
+            "name": "[prod] API pública — health",
+            "public_id": "4bd-ag8-a6n",
+            "status": "live",
+            "results": 72,
+            "last_status": 1
+          },
+          {
+            "name": "[prod] API pública — OpenAPI da auth-cpf",
+            "public_id": "x2y-ycf-fpy",
+            "status": "live",
+            "results": 72,
+            "last_status": 1
+          },
+          {
+            "name": "[prod] API pública — OpenAPI da auth-cpf",
+            "public_id": "dxe-zfw-vrq",
+            "status": "live",
+            "results": 24,
+            "last_status": 0
+          },
+          {
+            "name": "[prod] API pública — health",
+            "public_id": "mj7-nv8-qga",
+            "status": "live",
+            "results": 24,
+            "last_status": 0
+          }
+        ],
+        "message": "resultados de synthetics presentes"
+      }
     }
   ],
   "summary": {
-    "passed": 45,
+    "passed": 50,
     "failed": 0,
     "skipped": 1
   }

@@ -27,11 +27,15 @@ Story 12.1. Nenhum valor sensível é versionado: tudo vem de
 
 O repo **lambda** tem `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`
 e `TF_VAR_DD_API_KEY` próprios para o deploy standalone; o mono repassa o mesmo
-`TF_VAR_DD_API_KEY` no `workflow_call` (Story 20.1).
+`TF_VAR_DD_API_KEY` e também `TF_VAR_DD_APP_KEY` no `workflow_call` (Stories
+20.1/20.3). A app key é usada apenas pelo forwarder de eventos para o Event
+Management API v2; o caminho de logs usa só a API key.
 
 **Nomes diferentes:** o mono guarda `TF_VAR_DD_API_KEY` e o workflow repassa
 esse valor como `TF_DD_API_KEY` para os/inventory/billing, como
-`TF_VAR_dd_api_key` para o `lambda` e para o `infra` (addons/observability). O workflow de observability
+`TF_VAR_dd_api_key` para o `lambda` e para o `infra` (addons/observability).
+O `TF_VAR_DD_APP_KEY` também é repassado como `TF_VAR_dd_app_key` ao `lambda`
+e usado no job inline de observability. O workflow de observability
 (`infra/.github/workflows/observability.yml`) recebe
 `TF_VAR_dd_api_key`/`TF_VAR_dd_app_key`; o job `verify-observability` usa a
 API key como `DD_API_KEY` e a APP key como `DD_APP_KEY`.

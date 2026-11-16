@@ -1,38 +1,43 @@
 # Evidência — Datadog observability (stories 19.1–19.5, 20.1–20.3, 21.1–21.5)
 
-> **Estado em 2026-11-15 (19.x):** as stories 19.1–19.5 e as validações
-> 20.3/21.3 estão implementadas e verdes no CI (PR run 43775185765:
-> Terraform, Maven, pytest, scripts e link checker). O run de deploy
-> **43775223421** falhou no **bootstrap** porque o AWS Academy cancelou as
-> credenciais (`voc-cancel-cred`), antes de qualquer apply. A validação live
-> abaixo é a última execução deployada (run 43670113903), anterior às
-> mudanças 19.x. Para fechar a evidência, renove `AWS_ACCESS_KEY_ID`/
-> `AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` nos secrets e rode o workflow.
+> **Validação live final:** run **43797428512** (workflow_dispatch,
+> `feature/observability`), **success**. Gate: **50 pass / 0 fail / 1 skip**
+> (SQS, justificado no AWS Academy). O 20.3 passou via **Lambda forwarder +
+> Event Management API v2**; o 19.2 foi validado pelo `DT-DD-17` no
+> os-service. O span HTTP server é `http.request`; as trace metrics continuam
+> mapeadas pelo escopo da instrumentação OTel (`trace.org...`/`trace.io...`),
+> conforme a variável `trace_metric_prefixes`.
+> Synthetic tests: os 2 novos passam; 2 duplicados da conta anterior ainda
+> falham e ficam como limpeza pendente no Datadog.
 
-## Validação final — 2026-11-15 (conta AWS atual)
+## Validação final — 2026-11-16 (conta AWS atual)
 
-Execução de ponta a ponta: **run 43670113903** (workflow_dispatch,
+Execução de ponta a ponta: **run 43797428512** (workflow_dispatch,
 `feature/observability`), **success**.
 Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-report.json).
 
-- **Endpoint público:** `https://k6ateatqnh.execute-api.us-east-1.amazonaws.com`
-- **Dashboard:** `z66-twc-mdm` — 15 widgets
-- **Monitores:** 16 (`missing=[]`, `alerting=[]`)
-- **Gate:** 45 pass / 0 fail / 1 skip (SQS, justificado no AWS Academy)
-- **Alert routing:** 2 monitores de borda com `@` configurado; demais monitores usam `TF_VAR_alert_recipients`
+- **Endpoint público:** `https://we5lklh1vk.execute-api.us-east-1.amazonaws.com`
+- **Dashboard:** `ybt-6vw-p2t` — 15 widgets
+- **Monitores:** 18 (`missing=[]`, `alerting=[]`)
+- **Gate:** 50 pass / 0 fail / 1 skip (SQS)
+- **Alert routing:** `DT-DD-16` pass; monitores com `@` configurado
+- **CloudWatch → Datadog:** `DT-DD-18` pass com evento v2 (`CloudWatch alarm ...`)
 
 | Camada | Serviço | Hits (2h) | p95 | JVM/observação |
 |---|---|---:|---:|---|
-| EKS | os-service | 19.0 | 8.4 ms | heap 28.7 MB |
-| EKS | inventory-service | 19.2 | 13.0 ms | heap 17.2 MB |
-| EKS | billing-service | 17.0 | 6.8 ms | heap 22.7 MB |
-| Lambda | auth-cpf | 2.0 | 1.11 s (cold start) | `trace.aws.lambda.*` |
-| Lambda | jwt-authorizer | 1.0 | 184 ms | `trace.aws.lambda.*` |
+| EKS | os-service | 21.8 | 12.0 ms | heap 27.1 MB |
+| EKS | inventory-service | 14.3 | 10.3 ms | heap 17.9 MB |
+| EKS | billing-service | 9.3 | 7.3 ms | heap 19.5 MB |
+| Lambda | auth-cpf | 2.0 | 0.15 ms (trace metric; cold start ~1s) | `trace.aws.lambda.*` |
+| Lambda | jwt-authorizer | 1.0 | 180 ms | `trace.aws.lambda.*` |
 | Borda | API Gateway | — | — | 5 logs, `ip_leak=false` |
 
 Também passaram: tags `service/env/version` nos 5 serviços, correlação
 log↔trace por `trace_id` nos 5, ausência de spans duplicados, logs de borda
-com `source:apigateway` e monitores de 5xx/latência de borda.
+com `source:apigateway`, monitores de 5xx/latência de borda, atributo
+`ordem_servico.id` no os-service e resultados de synthetics. Billing/inventory
+têm os atributos de negócio implementados, mas não apareceram na amostra do
+warmup; a validação live dedicada deles fica como follow-up.
 
 ## Histórico — 2026-11-14 (conta AWS anterior)
 
@@ -49,6 +54,8 @@ Relatório bruto: [`datadog-observability-report.json`](./datadog-observability-
 | Mono PR (pipeline + docs + evidência) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/pull/7 |
 | Mono CI (PR, validação) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43637822728 |
 | Infra CI (PR, observability + plan) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra/actions/runs/43637793669 |
+| **Validação final (deploy + gate)** | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43797428512 |
+| PR final (validação) | https://github.com/lataVelha/lata-velha-pos-tech-fiap-mono/actions/runs/43797414849 |
 
 ## Recursos aplicados
 
