@@ -86,6 +86,13 @@ def monitor_address(name: str, environment: str) -> str | None:
         return None
     rest = name[len(prefix) :]
 
+    if rest.startswith("Edge (API Gateway) — "):
+        if "5xx" in rest:
+            return "datadog_monitor.edge_5xx"
+        if "latência" in rest:
+            return "datadog_monitor.edge_latency"
+        return None
+
     for service, key in SERVICE_KEYS.items():
         marker = f"{service} — "
         if rest.startswith(marker):

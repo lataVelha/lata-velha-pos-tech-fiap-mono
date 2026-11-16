@@ -33,6 +33,16 @@ class MonitorAddressTest(unittest.TestCase):
             'datadog_monitor.queue_age["os-events"]',
         )
 
+    def test_borda(self) -> None:
+        self.assertEqual(
+            imp.monitor_address("[prod] Edge (API Gateway) — 5xx acima de 5 em 5 min", "prod"),
+            "datadog_monitor.edge_5xx",
+        )
+        self.assertEqual(
+            imp.monitor_address("[prod] Edge (API Gateway) — latência > 1s", "prod"),
+            "datadog_monitor.edge_latency",
+        )
+
     def test_ignora_outro_ambiente_ou_nome(self) -> None:
         self.assertIsNone(imp.monitor_address("[dev] lata-velha-os-service — erros 5xx > 1%", "prod"))
         self.assertIsNone(imp.monitor_address("[prod] lata-velha-api — erros 5xx > 1%", "prod"))
