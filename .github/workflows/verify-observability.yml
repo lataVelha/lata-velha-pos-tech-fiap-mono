@@ -186,6 +186,7 @@ jobs:
               return {
                   "end": attributes.get("end_timestamp"),
                   "trace_id": otel.get("trace_id") or attributes.get("trace_id"),
+                  "span_id": attributes.get("span_id"),
                   "parent_id": attributes.get("parent_id"),
                   "operation": attributes.get("operation_name"),
                   "kind": (custom.get("span") or {}).get("kind"),
@@ -199,8 +200,14 @@ jobs:
               "lata-velha-billing-service",
           ):
               payload = client.search_spans(f"service:{service} env:prod", start, end, limit=10)
+              summaries = [summary(event) for event in payload.get("data", [])]
               print(f"== {service} ==")
-              print(json.dumps([summary(event) for event in payload.get("data", [])], indent=2))
+              print(json.dumps(summaries, indent=2))
+              trace_id = next((item["trace_id"] for item in summaries if item.get("trace_id")), None)
+              if trace_id:
+                  full = client.search_spans(f"trace_id:{trace_id}", start, end, limit=50)
+                  print(f"-- trace {trace_id} --")
+                  print(json.dumps([summary(event) for event in full.get("data", [])], indent=2))
           PY
 
       - name: Publicar relatório
