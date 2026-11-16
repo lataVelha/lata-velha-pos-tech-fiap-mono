@@ -8,10 +8,16 @@ name: Probe Datadog
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "spans ou dependencies"
+        type: choice
+        options: [spans, dependencies]
+        default: spans
       query:
         description: "Query do spans search (ex.: trace_id:...)"
         type: string
-        required: true
+        required: false
+        default: "service:lata-velha-os-service"
       minutes:
         description: "Janela em minutos"
         type: string
@@ -47,6 +53,7 @@ jobs:
           DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
           QUERY: ${{ inputs.query || 'service:lata-velha-os-service' }}
           MINUTES: ${{ inputs.minutes || '60' }}
+          MODE: ${{ inputs.mode || 'spans' }}
         run: |
           python3 - <<'PY'
           import json
@@ -60,6 +67,11 @@ jobs:
           client = v.DatadogClient(os.environ["DD_API_KEY"], os.environ["DD_APP_KEY"])
           end = v.utc_now()
           start = end - timedelta(minutes=int(os.environ["MINUTES"]))
-          payload = client.search_spans(os.environ["QUERY"], start, end, limit=50)
+          if os.environ.get("MODE") == "dependencies":
+              payload = client.get_service_dependencies(
+                  "prod", end - timedelta(hours=24), end
+              )
+          else:
+              payload = client.search_spans(os.environ["QUERY"], start, end, limit=50)
           print(json.dumps(payload, indent=2)[:200000])
           PY
