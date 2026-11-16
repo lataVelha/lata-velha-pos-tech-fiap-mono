@@ -208,6 +208,17 @@ jobs:
                   full = client.search_spans(f"trace_id:{trace_id}", start, end, limit=50)
                   print(f"-- trace {trace_id} --")
                   print(json.dumps([summary(event) for event in full.get("data", [])], indent=2))
+
+          queries = {
+              "os-producer-diagnostico": 'service:lata-velha-os-service operation_name:"SNS Publish DiagnosticoFinalizado"',
+              "billing-producer-aprovado": 'service:lata-velha-billing-service operation_name:"SNS Publish OrcamentoAprovado"',
+              "os-consumer-aprovado": 'service:lata-velha-os-service operation_name:"SQS Process OrcamentoAprovado"',
+              "inventory-consumer-service-ended": 'service:lata-velha-inventory-service operation_name:"SQS Process ServiceEnded"',
+          }
+          for label, query in queries.items():
+              payload = client.search_spans(query, start, end, limit=5)
+              print(f"== {label} ==")
+              print(json.dumps([summary(event) for event in payload.get("data", [])], indent=2))
           PY
 
       - name: Publicar relatório
