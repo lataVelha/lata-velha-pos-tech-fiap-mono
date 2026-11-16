@@ -205,6 +205,10 @@ class DatadogClient:
         params = urllib.parse.urlencode({"monitor_tags": monitor_tags})
         return _request("GET", f"{self.api_url}/api/v1/monitor?{params}", self.headers)
 
+    def list_metrics(self, query: str, start: datetime) -> dict[str, Any]:
+        params = {"q": query, "from": int(start.timestamp())}
+        return _request("GET", f"{self.api_url}/api/v1/metrics?{urllib.parse.urlencode(params)}", self.headers)
+
     def list_events(self, start: datetime, end: datetime, tags: str | None = None) -> dict[str, Any]:
         params = {"start": int(start.timestamp()), "end": int(end.timestamp())}
         if tags:
@@ -653,6 +657,35 @@ def check_business_attributes(client: DatadogClient, start: datetime, end: datet
     }
 
 
+def check_trace_metric_names(client: DatadogClient, start: datetime) -> dict[str, Any]:
+    """DT-DD-20 (diagnóstico): quais trace metrics existem após o rename."""
+    names: set[str] = set()
+    for query in ("trace.http.request", "trace.org.springframework.boot", "trace.io.opentelemetry"):
+        try:
+            payload = client.list_metrics(query, start)
+        except DatadogError:
+            continue
+        for metric in payload.get("metrics", []) or []:
+            if isinstance(metric, dict) and metric.get("id"):
+                names.add(str(metric["id"]))
+    has_http = any(name.startswith("trace.http.request") for name in names)
+    has_old = any(
+        name.startswith("trace.org.springframework.boot") or name.startswith("trace.io.opentelemetry")
+        for name in names
+    )
+    status = "pass" if has_http else ("fail" if has_old else "skip")
+    return {
+        "id": "DT-DD-20",
+        "status": status,
+        "details": {
+            "http_request": has_http,
+            "old_names": has_old,
+            "metrics": sorted(names)[:80],
+            "message": "trace.http.request presente" if has_http else "nome antigo ainda em uso ou sem métricas",
+        },
+    }
+
+
 def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start: datetime, end: datetime) -> dict[str, Any]:
     """DT-DD-18: evento de alarme CloudWatch chegou ao Datadog (Story 20.3)."""
     if not alarm_name:
@@ -893,6 +926,7 @@ def main(argv: list[str] | None = None) -> int:
         checks.append(check_edge_monitors(client))
         checks.append(check_alert_routing(client))
         checks.append(check_business_attributes(client, start, end))
+        checks.append(check_trace_metric_names(client, start))
         checks.append(check_cloudwatch_event(client, args.cloudwatch_event, start, end))
         checks.append(check_health(args.api_url))
         if args.synthetic_wait:
