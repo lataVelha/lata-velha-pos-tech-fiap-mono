@@ -15,6 +15,7 @@ Critérios (rastreáveis às stories 21.2/21.5):
   DT-DD-16  monitores com canal de notificação (@) configurado
   DT-DD-17  atributos de negócio (os_id, valor etc.)
   DT-DD-22  arestas esperadas no Service Map (service_dependencies)
+  DT-DD-23  arestas do API Gateway (host inferido) para os serviços
   DT-DD-10  health público 200/UP
 
 Uso:
@@ -653,6 +654,26 @@ def check_service_dependencies(client: DatadogClient, env: str, start: datetime,
     }
 
 
+def check_edge_dependencies(client: DatadogClient, env: str, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-23: o host inferido do API Gateway chama os três serviços EKS."""
+    payload = client.get_service_dependencies(env, start, end)
+    edge_hosts = [name for name in payload if ".execute-api." in name]
+    calls: set[str] = set()
+    for host in edge_hosts:
+        calls.update((payload.get(host) or {}).get("calls") or [])
+    missing = sorted(EXPECTED_SERVICE_EDGES.keys() - calls)
+    return {
+        "id": "DT-DD-23",
+        "status": "pass" if edge_hosts and not missing else "fail",
+        "details": {
+            "env": env,
+            "edge_hosts": edge_hosts,
+            "calls": sorted(calls),
+            "missing": missing,
+        },
+    }
+
+
 def check_edge_logs(client: DatadogClient, start: datetime, end: datetime) -> dict[str, Any]:
     """DT-DD-14: access logs do API Gateway chegaram ao Datadog (sem IP/PII)."""
     query = "service:lata-velha-edge source:apigateway"
@@ -1071,6 +1092,7 @@ def main(argv: list[str] | None = None) -> int:
         checks.extend(check_tags(client, services, args.env, start, end))
         checks.extend(check_log_correlation(client, services, args.env, start, end))
         checks.append(check_service_dependencies(client, args.env, start, end))
+        checks.append(check_edge_dependencies(client, args.env, start, end))
         primary = next((name for name in selected if SERVICES[name].get("monitored", True)), selected[0])
         checks.append(check_duplicate_spans(client, find_first_trace_id(client, primary, args.env, start, end), start, end))
         checks.append(check_dashboard(client))

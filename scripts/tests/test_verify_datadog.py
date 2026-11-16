@@ -146,6 +146,25 @@ class CheckTests(unittest.TestCase):
             result["details"]["missing"]["lata-velha-os-service"],
         )
 
+    def test_edge_dependencies_edges(self) -> None:
+        host = "we5lklh1vk.execute-api.us-east-1.amazonaws.com"
+        self.client.service_dependencies[host] = {
+            "calls": [
+                "lata-velha-auth-cpf",
+                "lata-velha-jwt-authorizer",
+                *v.EXPECTED_SERVICE_EDGES.keys(),
+            ]
+        }
+        result = v.check_edge_dependencies(self.client, "prod", self.start, self.end)
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["edge_hosts"], [host])
+        self.assertEqual(result["details"]["missing"], [])
+
+        self.client.service_dependencies[host]["calls"] = ["lata-velha-auth-cpf"]
+        result = v.check_edge_dependencies(self.client, "prod", self.start, self.end)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("lata-velha-os-service", result["details"]["missing"])
+
 
 class MainTests(unittest.TestCase):
     def test_dry_run_returns_zero_without_http(self) -> None:
