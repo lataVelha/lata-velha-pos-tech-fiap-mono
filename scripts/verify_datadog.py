@@ -530,10 +530,18 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
             trace_id = find_first_trace_id(client, service, env, recent_start, end)
         correlated = 0
         if trace_id:
-            # A query reservada @trace_id funciona quando o campo é de topo;
-            # o fallback por texto cobre logs Lambda cujo trace_id está no JSON
-            # da mensagem.
-            for query in (f"@trace_id:{trace_id}", f'service:{service} "{trace_id}"'):
+            # @trace_id funciona quando o campo é de topo; o fallback cobre
+            # logs Lambda e a diferença decimal (64-bit) vs hex (OTLP).
+            candidates = [f"@trace_id:{trace_id}", f"trace_id:{trace_id}"]
+            hex_id = f"{int(trace_id):032x}" if trace_id.isdigit() else trace_id
+            if hex_id != trace_id:
+                candidates += [f"@trace_id:{hex_id}", f"trace_id:{hex_id}"]
+            candidates += [
+                f"@dd.trace_id:{trace_id}",
+                f'service:{service} "{trace_id}"',
+                f'service:{service} "{hex_id}"',
+            ]
+            for query in candidates:
                 result = client.search_logs(query, recent_start, end, limit=5)
                 correlated = len(result.get("data", []) or [])
                 if correlated:
