@@ -410,8 +410,6 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      TF_VAR_dd_api_key: ${{ secrets.TF_VAR_DD_API_KEY }}
-      TF_VAR_dd_app_key: ${{ secrets.TF_VAR_DD_APP_KEY }}
 
   # ============================================================
   # CD · WORKLOADS — os, inventory e billing rodam EM PARALELO.
