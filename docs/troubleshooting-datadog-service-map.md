@@ -513,19 +513,22 @@ Implementação feita **sem merge para master**:
 |---|---|
 | Shared-kernel (P0) | commit `873215c`; `messageAttributeNames("All")` + `messageSystemAttributeNames` + `OpenTelemetry` injetado |
 | os/inventory/billing | commits `1c55ce8` / `6597484` / `4fa7125` (bump do shared-kernel + `opentelemetry-sdk-testing`) |
-| Infra (P1) | commits `908e75d` (env do Agent) e `a7626c6` (timeout 900s no Helm release) |
+| Infra (P1) | commits `908e75d` (env do Agent), `a7626c6` (timeout 900s) e `229f3f1` (revert do env — o upgrade travou o DaemonSet) |
 | Mono (gate/docs) | commits `efa9f82`, `a82894b`, `15ae419` (`DT-DD-22`, `DT-DD-12` com skip e candidatos de query) |
 | Testes locais | os: 807 testes / 0 falhas; inventory: 254 / 0; billing: 125 / 0; LocalStack IT: 4 / 0; E2E: 28 / 0 |
 | CI (PR) | validação verde (Terraform, Maven, pytest, scripts) |
-| CD | os/inventory/billing deployados; addons falhou no Helm release do Agent por timeout de 5m (corrigido para 15m) |
-| Datadog antes do deploy | `DT-DD-22` fail: nenhuma aresta entre os três serviços; `DT-DD-12` fail: logs já têm `trace_id`/`span_id`, mas a query não correlacionava |
+| CD | os/inventory/billing deployados; addons falhou no Helm release do Agent por timeout de 5m; o timeout foi para 15m, mas o DaemonSet não ficou ready e o env do P1 foi revertido (`229f3f1`) |
+| Datadog depois do deploy | sem spans/JVM/logs dos serviços EKS: o Agent não estava recebendo OTLP; os endpoints da API respondiam 500/502. `DT-DD-22` continuou fail |
 
 > O `DT-DD-22` foi consultado ao vivo via `GET /api/v1/service_dependencies?env=prod` e retornou
 > os três serviços + o API Gateway, **sem nenhuma chamada entre eles** — o RED que motivou a correção.
 
 ### 13.1 Pendências após esta execução
 
-- [ ] Rodar o addons com o timeout de 900s e confirmar o rollout do Agent (P1).
+- [x] Reverter o `values` do Agent (commit `229f3f1`) para restaurar o DaemonSet; o P1 (inferred services) fica pendente.
+- [ ] Com credenciais AWS válidas, aplicar o addons revertido (ou `helm rollback datadog 1 -n datadog`) e confirmar `kubectl -n datadog rollout status ds/datadog-agent`.
+- [ ] Reaplicar o P1 em duas etapas: primeiro só `DD_APM_COMPUTE_STATS_BY_SPAN_KIND` + `DD_APM_PEER_TAGS_AGGREGATION`, validar o rollout; depois `DD_APM_PEER_TAGS`, validar de novo. Ou atualizar o chart para Agent ≥7.60, onde os defaults já bastam.
 - [ ] Rodar `verify-observability.yml` com `api_url` informado (bypass do S3 quando as credenciais do Academy expiram) e confirmar `DT-DD-22` GREEN.
+- [ ] Investigar os 500/502 dos serviços EKS após o deploy (health 200 no cluster, mas API Gateway 500/502) antes de gerar tráfego de negócio.
 - [ ] Investigar por que `@trace_id:<id>` não fecha com o `trace_id` decimal dos logs OTLP; o check já tenta decimal/hex, `trace_id` e `@dd.trace_id`.
 - [ ] `DT-DD-18` (evento CloudWatch) continua falhando por limitação do AWS Academy (sem integração AWS nativa).
