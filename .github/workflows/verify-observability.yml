@@ -25,6 +25,10 @@ on:
         description: "Segundos de espera para o primeiro resultado dos synthetics"
         type: string
         default: "360"
+      api_url:
+        description: "URL pública do health (opcional; vazio = descobre no state S3)"
+        type: string
+        default: ""
   # Enquanto o workflow não está na default branch, o workflow_dispatch
   # retorna 404. O gatilho abaixo permite validá-lo na feature branch sem
   # rodar a cada push (só quando o próprio workflow/script muda).
@@ -53,6 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Autenticar na AWS
+        if: inputs.api_url == ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -61,6 +66,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Descobrir URL pública do health
+        if: inputs.api_url == ''
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           STATE_BUCKET="lata-velha-tfstate-${ACCOUNT_ID}"
@@ -69,7 +75,15 @@ jobs:
           echo "APP_API_URL=${APP_URL}" >> "$GITHUB_ENV"
           echo "API: ${APP_URL}"
 
+      - name: Usar URL informada
+        if: inputs.api_url != ''
+        run: |
+          echo "APP_API_URL=${{ inputs.api_url }}" >> "$GITHUB_ENV"
+          echo "API: ${{ inputs.api_url }}"
+
       - name: Gerar tráfego de verificação (EKS + Lambda)
+        if: env.APP_API_URL != ''
+        continue-on-error: true
         run: |
           set -euo pipefail
           BASE="${APP_API_URL%/}"
@@ -85,6 +99,7 @@ jobs:
           curl -s -o /dev/null "$BASE/ordens-servico"
 
       - name: Forçar alarme CloudWatch (validação 20.3)
+        if: inputs.api_url == ''
         run: |
           set -euo pipefail
           ALARM=$(aws cloudwatch describe-alarms \

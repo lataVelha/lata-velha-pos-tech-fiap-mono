@@ -493,7 +493,7 @@ void consumerSpanIsChildOfProducer() {
 }
 ```
 
-> O `SqsEventListener.TRACER` é `static final`, mas o `GlobalOpenTelemetry` delega para o SDK setado; por isso o teste funciona se o `GlobalOpenTelemetry.set(...)` ocorrer antes da primeira instanciação da classe. Se preferir, injete `Tracer`/`OpenTelemetry` no construtor — melhora testabilidade e não muda o comportamento em runtime.
+> O `SqsEventListener` recebe `OpenTelemetry` por construtor; o teste usa um `SdkTracerProvider` com `InMemorySpanExporter`. Em runtime, o starter injeta o bean `OpenTelemetry`.
 
 ### 12.3 Referências
 
@@ -502,3 +502,30 @@ void consumerSpanIsChildOfProducer() {
 - [Datadog OTLP Ingestion by the Agent](https://docs.datadoghq.com/opentelemetry/interoperability/otlp_ingest_in_the_agent)
 - [Datadog Service Dependencies API](https://docs.datadoghq.com/api/latest/service-dependencies/)
 - [Tracing asynchronous systems: parent-child vs span links](https://www.datadoghq.com/blog/parent-child-vs-span-links-tracing/)
+
+---
+
+## 13. Execução em 2026-11-16 (branch `feature/observability`)
+
+Implementação feita **sem merge para master**:
+
+| Item | Resultado |
+|---|---|
+| Shared-kernel (P0) | commit `873215c`; `messageAttributeNames("All")` + `messageSystemAttributeNames` + `OpenTelemetry` injetado |
+| os/inventory/billing | commits `1c55ce8` / `6597484` / `4fa7125` (bump do shared-kernel + `opentelemetry-sdk-testing`) |
+| Infra (P1) | commits `908e75d` (env do Agent) e `a7626c6` (timeout 900s no Helm release) |
+| Mono (gate/docs) | commits `efa9f82`, `a82894b`, `15ae419` (`DT-DD-22`, `DT-DD-12` com skip e candidatos de query) |
+| Testes locais | os: 807 testes / 0 falhas; inventory: 254 / 0; billing: 125 / 0; LocalStack IT: 4 / 0; E2E: 28 / 0 |
+| CI (PR) | validação verde (Terraform, Maven, pytest, scripts) |
+| CD | os/inventory/billing deployados; addons falhou no Helm release do Agent por timeout de 5m (corrigido para 15m) |
+| Datadog antes do deploy | `DT-DD-22` fail: nenhuma aresta entre os três serviços; `DT-DD-12` fail: logs já têm `trace_id`/`span_id`, mas a query não correlacionava |
+
+> O `DT-DD-22` foi consultado ao vivo via `GET /api/v1/service_dependencies?env=prod` e retornou
+> os três serviços + o API Gateway, **sem nenhuma chamada entre eles** — o RED que motivou a correção.
+
+### 13.1 Pendências após esta execução
+
+- [ ] Rodar o addons com o timeout de 900s e confirmar o rollout do Agent (P1).
+- [ ] Rodar `verify-observability.yml` com `api_url` informado (bypass do S3 quando as credenciais do Academy expiram) e confirmar `DT-DD-22` GREEN.
+- [ ] Investigar por que `@trace_id:<id>` não fecha com o `trace_id` decimal dos logs OTLP; o check já tenta decimal/hex, `trace_id` e `@dd.trace_id`.
+- [ ] `DT-DD-18` (evento CloudWatch) continua falhando por limitação do AWS Academy (sem integração AWS nativa).
