@@ -1,0 +1,58 @@
+name: Probe Datadog
+
+# Diagnóstico pontual: imprime os spans de uma query (sem rodar o gate inteiro).
+# Uso:
+#   gh workflow run probe-datadog.yml --ref feature/observability \
+#     -f query='trace_id:<hex>' -f minutes=60
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Query do spans search (ex.: trace_id:...)"
+        type: string
+        required: true
+      minutes:
+        description: "Janela em minutos"
+        type: string
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: "Probe · Datadog spans"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Consultar spans
+        env:
+          DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
+          QUERY: ${{ inputs.query }}
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import timedelta
+
+          sys.path.insert(0, "scripts")
+          import verify_datadog as v
+
+          client = v.DatadogClient(os.environ["DD_API_KEY"], os.environ["DD_APP_KEY"])
+          end = v.utc_now()
+          start = end - timedelta(minutes=int(os.environ["MINUTES"]))
+          payload = client.search_spans(os.environ["QUERY"], start, end, limit=50)
+          print(json.dumps(payload, indent=2)[:200000])
+          PY
