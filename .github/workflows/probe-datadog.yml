@@ -16,6 +16,13 @@ on:
         description: "Janela em minutos"
         type: string
         default: "60"
+  # Mantém o workflow registrado na branch da feature (workflow_dispatch só
+  # aparece depois que o arquivo existe; um push registra sem depender da
+  # default branch).
+  push:
+    branches: [feature/observability]
+    paths:
+      - ".github/workflows/probe-datadog.yml"
 
 permissions:
   contents: read
@@ -38,8 +45,8 @@ jobs:
         env:
           DD_API_KEY: ${{ secrets.TF_VAR_DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.TF_VAR_DD_APP_KEY }}
-          QUERY: ${{ inputs.query }}
-          MINUTES: ${{ inputs.minutes }}
+          QUERY: ${{ inputs.query || 'service:lata-velha-os-service' }}
+          MINUTES: ${{ inputs.minutes || '60' }}
         run: |
           python3 - <<'PY'
           import json
