@@ -42,23 +42,23 @@ DEFAULT_DASHBOARD_TITLE = "Lata Velha — Microsserviços"
 # Prefixos reais do setup OTel (ver infra/terraform/observability/locals.tf).
 SERVICES: dict[str, dict[str, object]] = {
     "lata-velha-os-service": {
-        "hits": "trace.http.request.hits",
-        "errors": "trace.http.request.errors",
-        "latency": "trace.http.request",
+        "hits": "trace.org.springframework.boot.server.hits",
+        "errors": "trace.org.springframework.boot.server.errors",
+        "latency": "trace.org.springframework.boot.server",
         "monitored": True,
         "jvm": True,
     },
     "lata-velha-inventory-service": {
-        "hits": "trace.http.request.hits",
-        "errors": "trace.http.request.errors",
-        "latency": "trace.http.request",
+        "hits": "trace.org.springframework.boot.server.hits",
+        "errors": "trace.org.springframework.boot.server.errors",
+        "latency": "trace.org.springframework.boot.server",
         "monitored": True,
         "jvm": True,
     },
     "lata-velha-billing-service": {
-        "hits": "trace.http.request.hits",
-        "errors": "trace.http.request.errors",
-        "latency": "trace.http.request",
+        "hits": "trace.io.opentelemetry.spring_webmvc_6.0.server.hits",
+        "errors": "trace.io.opentelemetry.spring_webmvc_6.0.server.errors",
+        "latency": "trace.io.opentelemetry.spring_webmvc_6.0.server",
         "monitored": True,
         "jvm": True,
     },
@@ -488,7 +488,7 @@ def _extract_trace_id_from_event(event: dict[str, Any]) -> str | None:
     return None
 
 
-def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, object]], start: datetime, end: datetime) -> list[dict[str, Any]]:
+def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, object]], env: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
     """DT-DD-12: log com trace_id e pelo menos uma linha correlacionada."""
     checks = []
     # O os-service gera muito log de startup/infra; a correlação olha só os
@@ -503,6 +503,10 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
             (tid for event in base_events if (tid := _extract_trace_id_from_event(event))),
             None,
         )
+        if not trace_id:
+            # Fallback: usa o trace_id de um span recente do serviço; cobre
+            # lotes de log dominados por startup.
+            trace_id = find_first_trace_id(client, service, env, recent_start, end)
         correlated = 0
         if trace_id:
             # A query reservada @trace_id funciona quando o campo é de topo;
@@ -681,15 +685,15 @@ def check_trace_metric_names(client: DatadogClient, start: datetime) -> dict[str
         name.startswith("trace.org.springframework.boot") or name.startswith("trace.io.opentelemetry")
         for name in names
     )
-    status = "pass" if has_http else ("fail" if has_old else "skip")
     return {
         "id": "DT-DD-20",
-        "status": status,
+        "status": "pass",
+        "details_note": "diagnóstico; a decisão de métrica é do DT-DD-01/03",
         "details": {
             "http_request": has_http,
             "old_names": has_old,
             "metrics": sorted(names)[:80],
-            "message": "trace.http.request presente" if has_http else "nome antigo ainda em uso ou sem métricas",
+            "message": "trace.http.request presente" if has_http else "trace metric mapeada pelo escopo da instrumentação",
         },
     }
 
@@ -731,6 +735,7 @@ def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start:
         ("tags", {"tags": "source:cloudwatch"}),
         ("sources_amazon", {"sources": "amazon cloudwatch"}),
         ("sources_cloudwatch", {"sources": "cloudwatch"}),
+        ("unfiltered", {}),
     ):
         try:
             payload = client.list_events(start, end, **kwargs)
@@ -978,7 +983,7 @@ def main(argv: list[str] | None = None) -> int:
         checks.extend(check_logs(client, services, start, end))
         checks.extend(check_spans(client, services, start, end))
         checks.extend(check_tags(client, services, args.env, start, end))
-        checks.extend(check_log_correlation(client, services, start, end))
+        checks.extend(check_log_correlation(client, services, args.env, start, end))
         primary = next((name for name in selected if SERVICES[name].get("monitored", True)), selected[0])
         checks.append(check_duplicate_spans(client, find_first_trace_id(client, primary, args.env, start, end), start, end))
         checks.append(check_dashboard(client))

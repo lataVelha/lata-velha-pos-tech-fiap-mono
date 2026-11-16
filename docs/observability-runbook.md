@@ -3,7 +3,7 @@
 > **Estado em 2026-11-15:** 19.1–19.5 implementados no branch
 > `feature/observability`; o deploy final está bloqueado por credenciais AWS
 > Academy canceladas. As queries abaixo descrevem o alvo **após o deploy**
-> (`trace.http.request`, `messaging.*`, `http.request`); a última validação
+> (`http.request` no span, `messaging.*` e o mapa de trace metrics); a última validação
 > live é o run 43670113903.
 
 Stories 18.4, 21.1, 21.2, 21.4 e 21.5. Serviços cobertos:
@@ -25,18 +25,19 @@ Stack gerenciado por Terraform: `infra/terraform/observability`
 
 ## 2. Métricas reais do OTel (este setup)
 
-A Story 19.3 padronizou o nome da operação do span HTTP server para
-`http.request` via `HttpSpanNameConfig` (um `SpanProcessor` no
-`shared-kernel`). As trace metrics dos 3 serviços EKS são:
+A Story 19.3 renomeia o span HTTP server para `http.request` e corrige o
+status de 4xx. O Datadog, porém, deriva a trace metric do escopo da
+instrumentação OTel, não do nome do span; por isso o mapa
+`trace_metric_prefixes` continua sendo a fonte da verdade:
 
 | Serviço | Hits/errors | Latência p95 |
 |---|---|---|
-| os | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
-| inventory | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
-| billing | `trace.http.request.{hits,errors}` | `p95:trace.http.request` |
+| os | `trace.org.springframework.boot.server.{hits,errors}` | `p95:trace.org.springframework.boot.server` |
+| inventory | `trace.org.springframework.boot.server.{hits,errors}` | `p95:trace.org.springframework.boot.server` |
+| billing | `trace.io.opentelemetry.spring_webmvc_6.0.server.{hits,errors}` | `p95:trace.io.opentelemetry.spring_webmvc_6.0.server` |
 
 - A latência é publicada em **segundos** e a métrica-base é a distribuição
-  de duração (`trace.http.request`); **não** existe `.duration`.
+  de duração (`trace.<operation>`); **não** existe `.duration`.
 - O baseline em `variables.tf` (`p95_baseline_ms`) é convertido para
   segundos no monitor (`ms / 1000`).
 - O mapa fica em `trace_metric_prefixes` (`infra/terraform/observability/variables.tf`).

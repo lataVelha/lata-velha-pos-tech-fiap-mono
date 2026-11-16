@@ -58,7 +58,7 @@ class TagsTests(unittest.TestCase):
 
 class CorrelationTests(unittest.TestCase):
     def test_log_correlation_pass(self) -> None:
-        checks = v.check_log_correlation(LogClient(), {"lata-velha-auth-cpf": {}}, START, END)
+        checks = v.check_log_correlation(LogClient(), {"lata-velha-auth-cpf": {}}, "prod", START, END)
         self.assertEqual(checks[0]["status"], "pass")
         self.assertEqual(checks[0]["details"]["trace_id"], "0123456789abcdef")
 
@@ -67,7 +67,10 @@ class CorrelationTests(unittest.TestCase):
             def search_logs(self, *args, **kwargs):
                 return {"data": [{}]}
 
-        checks = v.check_log_correlation(Empty(), {"lata-velha-auth-cpf": {}}, START, END)
+            def search_spans(self, *args, **kwargs):
+                return {"data": []}
+
+        checks = v.check_log_correlation(Empty(), {"lata-velha-auth-cpf": {}}, "prod", START, END)
         self.assertEqual(checks[0]["status"], "fail")
 
 
