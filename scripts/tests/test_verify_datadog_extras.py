@@ -28,9 +28,13 @@ class EventClient:
     def __init__(self, match: bool):
         self.match = match
 
+    def list_events_v2(self, start, end, query="source:cloudwatch"):
+        if not self.match:
+            return {"data": []}
+        return {"data": [{"id": "v2-1", "attributes": {"title": "CloudWatch alarm lata-velha-os-service-events-dlq-messages", "message": "State: ALARM", "tags": ["source:cloudwatch"]}}]}
+
     def list_events(self, start, end, tags=None, sources=None):
-        title = "CloudWatch alarm lata-velha-os-service-events-dlq-messages" if self.match else "outro alarme"
-        return {"events": [{"title": title, "text": ""}]}
+        return {"events": []}
 
 
 class SyntheticClient:

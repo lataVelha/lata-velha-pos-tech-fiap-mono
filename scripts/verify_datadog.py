@@ -209,6 +209,15 @@ class DatadogClient:
         params = {"q": query, "from": int(start.timestamp())}
         return _request("GET", f"{self.api_url}/api/v1/metrics?{urllib.parse.urlencode(params)}", self.headers)
 
+    def list_events_v2(self, start: datetime, end: datetime, query: str = "source:cloudwatch") -> dict[str, Any]:
+        params = {
+            "filter[query]": query,
+            "filter[from]": iso(start),
+            "filter[to]": iso(end),
+            "page[limit]": 100,
+        }
+        return _request("GET", f"{self.api_url}/api/v2/events?{urllib.parse.urlencode(params)}", self.headers)
+
     def list_events(
         self,
         start: datetime,
@@ -731,6 +740,25 @@ def check_cloudwatch_event(client: DatadogClient, alarm_name: str | None, start:
         }
     buckets: dict[str, Any] = {}
     all_events: list[dict[str, Any]] = []
+    try:
+        v2_payload = client.list_events_v2(start, end)
+        v2_data = v2_payload.get("data", []) or []
+        buckets["v2"] = len(v2_data)
+        for item in v2_data:
+            attrs = item.get("attributes") or {}
+            all_events.append(
+                {
+                    "id": item.get("id"),
+                    "title": attrs.get("title"),
+                    "text": attrs.get("message"),
+                    "tags": attrs.get("tags"),
+                    "source_type_name": None,
+                    "date_happened": attrs.get("timestamp"),
+                }
+            )
+    except DatadogError as error:
+        buckets["v2"] = f"erro: {error}"
+
     for label, kwargs in (
         ("tags", {"tags": "source:cloudwatch"}),
         ("sources_amazon", {"sources": "amazon cloudwatch"}),
