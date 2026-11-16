@@ -4,6 +4,7 @@
 [submodule "infra"]
 	path = infra
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra.git
+	branch = master
 [submodule "billing-service"]
 	path = billing-service
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-billing-service.git
