@@ -33,7 +33,7 @@ on:
   # retorna 404. O gatilho abaixo permite validá-lo na feature branch sem
   # rodar a cada push (só quando o próprio workflow/script muda).
   push:
-    branches: [feature/observability]
+    branches: [master]
     paths:
       - ".github/workflows/verify-observability.yml"
       - "scripts/verify_datadog.py"
