@@ -623,10 +623,11 @@ jobs:
       always() &&
       github.event.inputs.dry_run != 'true' &&
       needs.deploy-lambda.result == 'success'
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@master
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: false
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -640,10 +641,11 @@ jobs:
     name: "CD · Destruir · edge (rotas do API Gateway)"
     needs: validate
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
-    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@master
+    uses: lataVelha/lata-velha-pos-tech-fiap-infra/.github/workflows/edge.yml@feature/observability
     with:
       aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
       destroy: true
+      ref: feature/observability
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
