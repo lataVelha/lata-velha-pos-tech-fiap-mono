@@ -53,6 +53,11 @@ done
   Fluxo gerado: OS 3 (diagnóstico → `DiagnosticoFinalizado`), aprovação
   (`OrcamentoAprovado`, via port-forward direto no billing) e execução
   (`ServiceEnded`/`OSEnded`/`CobrancaEmitida`).
+- [x] **2026-11-16 — ponte do edge:** o authorizer devolve `traceparent` e a
+  integração `alb_traced` o repassa ao ALB. Probe da trace
+  `6afb496c...` mostrou **10 spans do os-service na mesma trace** do
+  authorizer; `service_dependencies` mostra `jwt-authorizer → os/inventory/billing`.
+  Gate: `DT-DD-23`.
 - [x] Produção validada — 2026-11-14 (relatório `datadog-observability-report.json`).
 - [x] Sem referência ao serviço removido `lata-velha-api` na stack gerenciada.
 - [x] Evidência detalhada (hits, p95, JVM, logs, spans, dashboard e monitores):

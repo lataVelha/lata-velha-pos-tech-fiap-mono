@@ -22,13 +22,6 @@ on:
         description: "Janela em minutos"
         type: string
         default: "60"
-  # Mantém o workflow registrado na branch da feature (workflow_dispatch só
-  # aparece depois que o arquivo existe; um push registra sem depender da
-  # default branch).
-  push:
-    branches: [feature/observability]
-    paths:
-      - ".github/workflows/probe-datadog.yml"
 
 permissions:
   contents: read

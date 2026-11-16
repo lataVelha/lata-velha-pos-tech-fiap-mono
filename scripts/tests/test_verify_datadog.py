@@ -146,24 +146,21 @@ class CheckTests(unittest.TestCase):
             result["details"]["missing"]["lata-velha-os-service"],
         )
 
-    def test_edge_dependencies_edges(self) -> None:
+    def test_edge_dependencies_authorizer_bridge(self) -> None:
         host = "we5lklh1vk.execute-api.us-east-1.amazonaws.com"
         self.client.service_dependencies[host] = {
-            "calls": [
-                "lata-velha-auth-cpf",
-                "lata-velha-jwt-authorizer",
-                *v.EXPECTED_SERVICE_EDGES.keys(),
-            ]
+            "calls": ["lata-velha-auth-cpf", "lata-velha-jwt-authorizer"]
         }
-        result = v.check_edge_dependencies(self.client, "prod", self.start, self.end)
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["edge_hosts"], [host])
-        self.assertEqual(result["details"]["missing"], [])
+        self.client.service_dependencies["lata-velha-jwt-authorizer"] = {
+            "calls": [*v.EXPECTED_SERVICE_EDGES.keys()]
+        }
 
-        self.client.service_dependencies[host]["calls"] = ["lata-velha-auth-cpf"]
         result = v.check_edge_dependencies(self.client, "prod", self.start, self.end)
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("lata-velha-os-service", result["details"]["missing"])
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["missing"], [])
+        self.assertIn("lata-velha-os-service", result["details"]["authorizer_calls"])
+        self.assertNotIn("lata-velha-os-service", result["details"]["host_calls"])
 
 
 class MainTests(unittest.TestCase):

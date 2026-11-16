@@ -541,3 +541,27 @@ Implementação feita **sem merge para master**:
 - [ ] Decidir o tamanho final do node group (ficou `desiredSize=2`, antes 5/7) e reconciliar com o Terraform.
 - [ ] Rodar o CD completo com credenciais AWS válidas (addons + observability + edge + verify) para fechar o pipeline sem bypass de `api_url`.
 - [ ] `DT-DD-18` (evento CloudWatch) continua skip/fail por limitação do AWS Academy (sem integração AWS nativa).
+
+---
+
+## 14. Ponte API Gateway → authorizer → micros (2026-11-16)
+
+Implementada na `feature/observability`:
+
+| Repo | Commit | Mudança |
+|---|---|---|
+| lambda | `64e642c` | `authorizer_handler.py` devolve `traceparent` (W3C) no `context` do authorizer; log inclui o header |
+| infra | `c4c0d23` | integração `alb_traced` para as rotas protegidas com `overwrite:header.traceparent = $context.authorizer.traceparent`; `edge.yml` aceita `ref` |
+| mono | `d495514` / `d216e2a` / `61b15d7` | bumps, `deploy-edge`/`destroy-edge` na branch da feature, `DT-DD-23` e janela de 24h do Service Map |
+
+**Evidência ao vivo:**
+- Log do authorizer: `traceparent=00-6afb496c00000000eba4ef27560e6c59-...-01`.
+- Probe `trace_id:6afb496c... service:lata-velha-os-service` retornou **10 spans do os-service** na mesma trace (incluindo `http.server.request` e `io.opentelemetry.spring_webmvc_6.0.server`).
+- `GET /api/v1/service_dependencies?env=prod` (24h) mostra:
+  - `we5lklh1vk.execute-api... → lata-velha-jwt-authorizer` (e `auth-cpf`)
+  - `lata-velha-jwt-authorizer → lata-velha-os-service`, `→ inventory-service`, `→ billing-service`
+  - as arestas os ↔ billing ↔ inventory da saga.
+
+**Semântica:** a aresta é `host inferido → authorizer → EKS` — o authorizer é a ponte de contexto, não o chamador real. Para `API Gateway → EKS` direto seria necessário um Lambda proxy. Rotas públicas sem authorizer (`/auth/login`, `/billing/v3/api-docs`, webhook) não são cobertas por essa ponte.
+
+**Gate:** `DT-DD-23` valida que o authorizer chama os três serviços (24h). O host continua com o nome técnico; para renomear, usar **Service Remapping** `we5lklh1vk.execute-api...` → `lata-velha-api-gateway` (ou Catalog).
