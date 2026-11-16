@@ -242,11 +242,12 @@ headers.
   dentro do baseline, por serviço EKS, 30 dias.
 - **Synthetics** (`synthetics.tf`): `GET /actuator/health` e
   `GET /auth/cpf-openapi.json` a cada 5 min, 3 localizações, sem dados sensíveis.
-- **Fallback AWS** (`cloudwatch-events.tf`): quando
-  `aws_integration_enabled=false`, um EventBridge rule encaminha
-  `CloudWatch Alarm State Change` para o Datadog Events via API destination.
-  No AWS Academy a role usada é a `LabRole`; a entrega depende de um alarme
-  real disparar.
+- **Fallback AWS** (`cloudwatch-events.tf` + stack `lambda`): quando
+  `aws_integration_enabled=false`, uma EventBridge rule encaminha
+  `CloudWatch Alarm State Change` para o Datadog Events. Em contas com IAM a
+  variável `cloudwatch_events_forwarding_enabled` pode usar API destination;
+  no AWS Academy o caminho é o target Lambda `logs-forwarder` (resource-based
+  permission), que publica no `POST /api/v1/events` do Datadog.
 - `TF_VAR_alert_recipients` configura os `@` dos monitores; o gate
   `DT-DD-16` reporta `skip` explícito quando o secret está vazio.
 

@@ -108,7 +108,7 @@ jobs:
           FAILED=$(aws cloudwatch get-metric-statistics \
             --namespace AWS/Events \
             --metric-name FailedInvocations \
-            --dimensions Name=RuleName,Value=lata-velha-cloudwatch-alarms \
+            --dimensions Name=RuleName,Value=lata-velha-cloudwatch-alarms-forwarder \
             --start-time "$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" \
             --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --period 60 --statistics Sum \
@@ -117,7 +117,7 @@ jobs:
           INVOKED=$(aws cloudwatch get-metric-statistics \
             --namespace AWS/Events \
             --metric-name Invocations \
-            --dimensions Name=RuleName,Value=lata-velha-cloudwatch-alarms \
+            --dimensions Name=RuleName,Value=lata-velha-cloudwatch-alarms-forwarder \
             --start-time "$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" \
             --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --period 60 --statistics Sum \
