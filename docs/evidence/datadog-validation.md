@@ -20,7 +20,7 @@ ausência de duplicação. Executar em staging antes do go-live.
 | 3 | Logs correlacionados por `trace_id` | filtro `@trace_id:<id>` | [ ] |
 | 4 | Sem spans duplicados | 1 span HTTP por request | [ ] |
 | 5 | 5xx com `status=ERROR` + log | forçar erro e inspecionar | [ ] |
-| 6 | Service map com arestas esperadas | APM → Service Map | [ ] |
+| 6 | Service map com arestas esperadas | APM → Service Map e `DT-DD-22` (`GET /api/v1/service_dependencies`) | [ ] |
 | 7 | Admission Controller não injeta Java Agent | `kubectl get pod -o yaml | grep JAVA_TOOL_OPTIONS` | [ ] |
 | 8 | `clusterName=lata-velha-prod` nas métricas do Agent | Datadog → Infrastructure | [ ] |
 
@@ -52,5 +52,10 @@ done
   (health checks não geram log de negócio).
 
 > Dependência: traces distribuídos através de SNS/SQS (Story 18.3) precisam
-> do barramento aplicado e da feature flag `OTEL_INSTRUMENTATION_AWS_SDK_ENABLED`
-> ligada (default).
+> do barramento aplicado e da propagação W3C ligada. A flag antiga
+> `OTEL_INSTRUMENTATION_AWS_SDK_ENABLED` continua aceita como fallback de
+> `messaging.trace-propagation.enabled` (default `true`).
+>
+> O item 6 é automatizado pelo check `DT-DD-22` do `verify_datadog.py`: ele
+> consulta `GET /api/v1/service_dependencies?env=prod` e falha se faltar
+> qualquer aresta esperada entre os três serviços.

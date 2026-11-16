@@ -12,6 +12,9 @@ Critérios (rastreáveis às stories 21.2/21.5):
   DT-DD-07  dashboard gerenciado existe
   DT-DD-08  monitores gerenciados existem/saudáveis
   DT-DD-09  SQS (skip justificado quando a integração AWS está off)
+  DT-DD-16  monitores com canal de notificação (@) configurado
+  DT-DD-17  atributos de negócio (os_id, valor etc.)
+  DT-DD-22  arestas esperadas no Service Map (service_dependencies)
   DT-DD-10  health público 200/UP
 
 Uso:
@@ -244,6 +247,15 @@ class DatadogClient:
             "GET",
             f"{self.api_url}/api/v1/synthetics/tests/{public_id}/results?{urllib.parse.urlencode(params)}",
             self.headers,
+        )
+
+    def get_service_dependencies(self, env: str, start: datetime, end: datetime) -> dict[str, Any]:
+        """APM Service Map API (preview): {servico: {"calls": [servico, ...]}}."""
+        params = urllib.parse.urlencode(
+            {"env": env, "start": int(start.timestamp()), "end": int(end.timestamp())}
+        )
+        return _request(
+            "GET", f"{self.api_url}/api/v1/service_dependencies?{params}", self.headers
         )
 
 
@@ -532,7 +544,15 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
             "sample_keys": sorted(_all_keys(base_events[0])) if base_events else [],
             "trace_id": trace_id,
             "correlated_events": correlated,
-            "message": "trace_id presente no log" if trace_id else "nenhum log com trace_id",
+            "message": (
+                "log correlacionado por trace_id"
+                if correlated
+                else (
+                    "trace_id presente, mas nenhum log correlacionado"
+                    if trace_id
+                    else "nenhum log com trace_id"
+                )
+            ),
         }
         if service == "lata-velha-auth-cpf" and base_events:
             details["sample_messages"] = [
@@ -546,7 +566,7 @@ def check_log_correlation(client: DatadogClient, services: dict[str, dict[str, o
         checks.append(
             {
                 "id": f"DT-DD-12/{service}",
-                "status": "pass" if trace_id else "fail",
+                "status": "pass" if correlated > 0 else "fail",
                 "details": details,
             }
         )
@@ -591,6 +611,36 @@ def check_duplicate_spans(client: DatadogClient, trace_id: str | None, start: da
             "counts": {f"{service}:{route}": count for (service, route), count in counts.items()},
             "duplicates": duplicates,
             "message": "sem duplicação" if events and not duplicates else "trace sem spans ou com duplicação",
+        },
+    }
+
+
+EXPECTED_SERVICE_EDGES: dict[str, set[str]] = {
+    "lata-velha-os-service": {"lata-velha-inventory-service", "lata-velha-billing-service"},
+    "lata-velha-billing-service": {"lata-velha-os-service", "lata-velha-inventory-service"},
+    "lata-velha-inventory-service": {"lata-velha-os-service"},
+}
+
+
+def check_service_dependencies(client: DatadogClient, env: str, start: datetime, end: datetime) -> dict[str, Any]:
+    """DT-DD-22: arestas esperadas entre os serviços no Service Map."""
+    payload = client.get_service_dependencies(env, start, end)
+    missing: dict[str, list[str]] = {}
+    for service, expected in EXPECTED_SERVICE_EDGES.items():
+        calls = set((payload.get(service) or {}).get("calls") or [])
+        absent = sorted(expected - calls)
+        if absent:
+            missing[service] = absent
+    return {
+        "id": "DT-DD-22",
+        "status": "pass" if not missing else "fail",
+        "details": {
+            "env": env,
+            "expected": {
+                service: sorted(edges) for service, edges in EXPECTED_SERVICE_EDGES.items()
+            },
+            "missing": missing,
+            "services": sorted(payload.keys()),
         },
     }
 
@@ -1012,6 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
         checks.extend(check_spans(client, services, start, end))
         checks.extend(check_tags(client, services, args.env, start, end))
         checks.extend(check_log_correlation(client, services, args.env, start, end))
+        checks.append(check_service_dependencies(client, args.env, start, end))
         primary = next((name for name in selected if SERVICES[name].get("monitored", True)), selected[0])
         checks.append(check_duplicate_spans(client, find_first_trace_id(client, primary, args.env, start, end), start, end))
         checks.append(check_dashboard(client))

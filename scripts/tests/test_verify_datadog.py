@@ -34,6 +34,15 @@ class FakeClient:
         self.spans = 1
         self.dashboard = True
         self.monitor_state = "OK"
+        self.service_dependencies = {
+            "lata-velha-os-service": {
+                "calls": ["lata-velha-inventory-service", "lata-velha-billing-service"]
+            },
+            "lata-velha-billing-service": {
+                "calls": ["lata-velha-os-service", "lata-velha-inventory-service"]
+            },
+            "lata-velha-inventory-service": {"calls": ["lata-velha-os-service"]},
+        }
 
     def query_metric(self, query: str, start, end):
         return metric_payload(self.metric_value)
@@ -59,6 +68,9 @@ class FakeClient:
             for needle in ("5xx", "p95", "heap", "restarts"):
                 names.append({"name": f"[prod] {service} — {needle}", "overall_state": self.monitor_state})
         return names
+
+    def get_service_dependencies(self, env: str, start, end):
+        return self.service_dependencies
 
 
 class SeriesTests(unittest.TestCase):
@@ -120,6 +132,19 @@ class CheckTests(unittest.TestCase):
         result = v.check_monitors(self.client)
         self.assertEqual(result["status"], "fail")
         self.assertTrue(result["details"]["alerting"])
+
+    def test_service_dependencies_edges(self) -> None:
+        self.assertEqual(
+            v.check_service_dependencies(self.client, "prod", self.start, self.end)["status"],
+            "pass",
+        )
+        self.client.service_dependencies["lata-velha-os-service"]["calls"] = []
+        result = v.check_service_dependencies(self.client, "prod", self.start, self.end)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn(
+            "lata-velha-inventory-service",
+            result["details"]["missing"]["lata-velha-os-service"],
+        )
 
 
 class MainTests(unittest.TestCase):
