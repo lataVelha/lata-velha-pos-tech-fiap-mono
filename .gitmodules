@@ -15,3 +15,6 @@
 [submodule "os-service"]
 	path = os-service
 	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-os-service.git
+[submodule "documentation"]
+	path = documentation
+	url = https://github.com/lataVelha/lata-velha-pos-tech-fiap-documentation.git
